@@ -1,0 +1,22 @@
+{
+  "name": "leco-sem-platform",
+  "version": "1.0.0",
+  "description": "Smart Grid Electricity Meter Management System (Prepaid Electricity Platform) - EE5206 Software Group Project",
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix client install",
+    "seed": "node server/db/seed.js",
+    "build": "cmd /c \"npm --prefix client run build\"",
+    "start": "node server/index.js"
+  },
+  "keywords": [
+    "smart-grid",
+    "prepaid-electricity",
+    "leco",
+    "ceb",
+    "express",
+    "react",
+    "sqlite"
+  ],
+  "author": "EE5206 Software Group",
+  "license": "MIT"
+}
