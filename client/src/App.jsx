@@ -10,6 +10,7 @@ export default function App() {
   const [token, setToken] = useState('');
   const [isAuthOpen, setIsAuthOpen] = useState(true); // Open Sign In modal on startup by default
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchCurrentUser = async (authToken) => {
     try {
@@ -32,6 +33,13 @@ export default function App() {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshKey(prev => prev + 1);
+    if (token) {
+      await fetchCurrentUser(token);
+    }
+  };
+
   const handleLogout = () => {
     setToken('');
     setCurrentUser(null);
@@ -51,7 +59,7 @@ export default function App() {
       <Navbar
         currentUser={currentUser}
         onLogout={handleLogout}
-        onRefresh={() => fetchCurrentUser(token)}
+        onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
         onOpenAuth={() => setIsAuthOpen(true)}
       />
@@ -59,12 +67,13 @@ export default function App() {
       <main style={{ flex: 1, padding: '0 24px 40px' }}>
         {currentUser ? (
           currentUser.role === 'admin' ? (
-            <AdminDashboard token={token} />
+            <AdminDashboard token={token} refreshKey={refreshKey} />
           ) : (
             <CustomerDashboard
               currentUser={currentUser}
               token={token}
-              onDataChange={() => fetchCurrentUser(token)}
+              refreshKey={refreshKey}
+              onDataChange={handleRefresh}
             />
           )
         ) : (

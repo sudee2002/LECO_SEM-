@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Zap, Shield, FileText, Sliders, RefreshCw, Power, Edit2, Save, X, Plus, Trash2, UserPlus, AlertTriangle } from 'lucide-react';
 
-export default function AdminDashboard({ token }) {
+export default function AdminDashboard({ token, refreshKey }) {
   const [meters, setMeters] = useState([]);
   const [consumers, setConsumers] = useState([]);
   const [tariffs, setTariffs] = useState([]);
@@ -78,7 +78,7 @@ export default function AdminDashboard({ token }) {
 
   useEffect(() => {
     fetchAdminData();
-  }, [token]);
+  }, [token, refreshKey]);
 
   // Toggle Power Relay Override
   const handleToggleRelay = async (meterId, currentPowerState) => {

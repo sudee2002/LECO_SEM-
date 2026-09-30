@@ -3,7 +3,7 @@ import { Wallet, Zap, Calendar, Activity, Send, MessageSquare, AlertTriangle, Ar
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import TopUpModal from './TopUpModal';
 
-export default function CustomerDashboard({ currentUser, token, onDataChange }) {
+export default function CustomerDashboard({ currentUser, token, onDataChange, refreshKey }) {
   const [meterData, setMeterData] = useState(null);
   const [walletData, setWalletData] = useState(null);
   const [prediction, setPrediction] = useState(null);
@@ -55,7 +55,7 @@ export default function CustomerDashboard({ currentUser, token, onDataChange }) 
 
   useEffect(() => {
     if (token) fetchData();
-  }, [token, currentUser]);
+  }, [token, currentUser, refreshKey]);
 
   // Inject Simulated Telemetry Reading
   const handleSendTelemetry = async (additionalKwh) => {
