@@ -234,10 +234,10 @@ export default function AdminDashboard({ token, refreshKey }) {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      
+
       {/* System KPIs Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
-        
+
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '12px', fontWeight: '700' }}>
             <span>REGISTERED CONSUMERS</span>

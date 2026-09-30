@@ -79,7 +79,7 @@ export default function App() {
         ) : (
           /* Landing Page View when logged out */
           <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            
+
             {/* Hero Section */}
             <div className="glass-panel" style={{ padding: '56px 32px', textAlign: 'center', background: 'radial-gradient(circle at top, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.8) 70%)' }}>
               <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', boxShadow: '0 0 24px rgba(16, 185, 129, 0.5)' }}>
@@ -89,7 +89,7 @@ export default function App() {
               <h1 style={{ fontSize: '36px', fontWeight: '800', background: 'linear-gradient(90deg, #ffffff 0%, #cbd5e1 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '16px' }}>
                 LECO Smart Grid Prepaid Electricity Platform
               </h1>
-              
+
               <p style={{ fontSize: '16px', color: '#94a3b8', maxWidth: '680px', margin: '0 auto 28px', lineHeight: '1.6' }}>
                 Unified smart metering telemetry, automated relay cutoff management, instant wallet top-ups, and energy analytics platform.
               </p>
@@ -103,7 +103,7 @@ export default function App() {
 
             {/* Feature Highlights Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-              
+
               <div className="glass-panel" style={{ padding: '24px' }}>
                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
                   <Activity size={22} color="#34d399" />
