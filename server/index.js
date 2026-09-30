@@ -5,6 +5,7 @@ const fs = require('fs');
 
 const { initSchema } = require('./db/database');
 const authRoutes = require('./routes/auth');
+const consumerRoutes = require('./routes/consumers');
 const meterRoutes = require('./routes/meters');
 const tariffRoutes = require('./routes/tariffs');
 const walletRoutes = require('./routes/wallet');
@@ -22,6 +23,7 @@ app.use(express.json());
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/consumers', consumerRoutes);
 app.use('/api/meters', meterRoutes);
 app.use('/api/tariffs', tariffRoutes);
 app.use('/api/wallet', walletRoutes);

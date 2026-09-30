@@ -37,11 +37,8 @@ A smart meter reports electricity consumption; the backend converts incremental 
 
 ## 🔑 Demo Accounts
 
-| Role | Email | Password | Initial Balance | Assigned Meter |
-| :--- | :--- | :--- | :--- | :--- |
 | **System Admin** | `admin@leco.lk` | `Password123!` | N/A | Full Admin Access |
-| **Consumer 1 (Normal)** | `consumer@leco.lk` | `Password123!` | **LKR 2,500.00** | `MTR-1001` (Colombo) |
-| **Consumer 2 (Low Balance)** | `lowbalance@leco.lk` | `Password123!` | **LKR 18.50** | `MTR-1002` (Kandy) |
+| **Consumer** | `consumer@leco.lk` | `Password123!` | **LKR 2,500.00** | `MTR-1001` (Colombo) |
 
 ---
 

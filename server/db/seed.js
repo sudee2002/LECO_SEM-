@@ -26,23 +26,12 @@ async function seedDatabase() {
   );
   const customer1Id = customer1Result.lastID;
 
-  const customer2Result = await dbQuery.run(
-    `INSERT INTO users (name, email, password_hash, role, account_number) VALUES (?, ?, ?, ?, ?)`,
-    ['Kamal Silva (Low Balance)', 'lowbalance@leco.lk', passwordHash, 'customer', 'LEC-345678']
-  );
-  const customer2Id = customer2Result.lastID;
-
-  console.log(`Created Users with IDs: Admin=${adminId}, Customer1=${customer1Id}, Customer2=${customer2Id}`);
+  console.log(`Created Users with IDs: Admin=${adminId}, Customer1=${customer1Id}`);
 
   // 3. Insert Meters
   await dbQuery.run(
     `INSERT INTO meters (id, user_id, meter_number, location, status, power_state, last_reading_kwh) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ['MTR-1001', customer1Id, 'MTR-1001-COL', 'No. 45, Galle Road, Colombo 03', 'ACTIVE', 'CONNECTED', 142.5]
-  );
-
-  await dbQuery.run(
-    `INSERT INTO meters (id, user_id, meter_number, location, status, power_state, last_reading_kwh) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ['MTR-1002', customer2Id, 'MTR-1002-KND', 'No. 12, Peradeniya Road, Kandy', 'ACTIVE', 'CONNECTED', 88.0]
   );
 
   // 4. Insert Sri Lankan Tiered Block Tariffs
@@ -68,25 +57,10 @@ async function seedDatabase() {
   );
   const wallet1Id = w1.lastID;
 
-  const w2 = await dbQuery.run(
-    `INSERT INTO wallets (user_id, current_balance) VALUES (?, ?)`,
-    [customer2Id, 18.5]
-  );
-  const wallet2Id = w2.lastID;
-
   // 6. Insert Initial Wallet Transactions
   await dbQuery.run(
     `INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, balance_before, balance_after, reference) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [wallet1Id, customer1Id, 'TOPUP', 2500.0, 0.0, 2500.0, 'PAYHERE-INIT-001']
-  );
-
-  await dbQuery.run(
-    `INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, balance_before, balance_after, reference) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [wallet2Id, customer2Id, 'TOPUP', 100.0, 0.0, 100.0, 'PAYHERE-INIT-002']
-  );
-  await dbQuery.run(
-    `INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, balance_before, balance_after, reference) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [wallet2Id, customer2Id, 'CONSUMPTION', -81.5, 100.0, 18.5, 'BILLING-AUTO-INIT']
   );
 
   // 7. Insert Sample Historical Meter Readings
@@ -94,14 +68,9 @@ async function seedDatabase() {
   for (let i = 7; i >= 1; i--) {
     const readingDate = new Date(baseDate.getTime() - i * 24 * 60 * 60 * 1000).toISOString();
     const kwh1 = 142.5 - i * 4.2;
-    const kwh2 = 88.0 - i * 3.8;
     await dbQuery.run(
       `INSERT INTO meter_readings (meter_id, cumulative_kwh, incremental_kwh, cost_charged, created_at) VALUES (?, ?, ?, ?, ?)`,
       ['MTR-1001', kwh1, 4.2, 4.2 * 15.0, readingDate]
-    );
-    await dbQuery.run(
-      `INSERT INTO meter_readings (meter_id, cumulative_kwh, incremental_kwh, cost_charged, created_at) VALUES (?, ?, ?, ?, ?)`,
-      ['MTR-1002', kwh2, 3.8, 3.8 * 15.0, readingDate]
     );
   }
 
@@ -116,7 +85,6 @@ async function seedDatabase() {
   console.log('Demo Accounts Created:');
   console.log('1. Admin:    admin@leco.lk    / Password123!');
   console.log('2. Consumer: consumer@leco.lk / Password123! (Balance: LKR 2,500.00, Meter: MTR-1001)');
-  console.log('3. Low Bal:  lowbalance@leco.lk / Password123! (Balance: LKR 18.50, Meter: MTR-1002)');
   console.log('----------------------------------------------------');
 }
 
