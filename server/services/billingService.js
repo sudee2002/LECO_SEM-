@@ -173,7 +173,7 @@ async function calculateTariffCost(incrementalKwh, currentTotalKwh) {
 /**
  * Process new incoming meter reading & wallet deduction.
  */
-async function processMeterReading(meterId, cumulativeKwh) {
+async function processMeterReading(meterId, cumulativeKwh, customTimestamp = null) {
   const meter = await dbQuery.get('SELECT * FROM meters WHERE id = ?', [meterId]);
   if (!meter) {
     throw new Error(`Meter '${meterId}' not found.`);
@@ -195,15 +195,17 @@ async function processMeterReading(meterId, cumulativeKwh) {
   const balanceBefore = wallet.current_balance;
   const balanceAfter = parseFloat((balanceBefore - costCharged).toFixed(2));
 
+  const readingTimestamp = customTimestamp || new Date().toISOString();
+
   const readingRes = await dbQuery.run(
-    `INSERT INTO meter_readings (meter_id, cumulative_kwh, incremental_kwh, cost_charged) VALUES (?, ?, ?, ?)`,
-    [meterId, cumulativeKwh, incrementalKwh, costCharged]
+    `INSERT INTO meter_readings (meter_id, cumulative_kwh, incremental_kwh, cost_charged, created_at) VALUES (?, ?, ?, ?, ?)`,
+    [meterId, cumulativeKwh, incrementalKwh, costCharged, readingTimestamp]
   );
   const readingId = readingRes.lastID;
 
   await dbQuery.run(
-    `UPDATE meters SET last_reading_kwh = ?, last_reading_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    [cumulativeKwh, meterId]
+    `UPDATE meters SET last_reading_kwh = ?, last_reading_at = ? WHERE id = ?`,
+    [cumulativeKwh, readingTimestamp, meterId]
   );
 
   if (costCharged > 0) {
@@ -213,8 +215,8 @@ async function processMeterReading(meterId, cumulativeKwh) {
     );
 
     await dbQuery.run(
-      `INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, balance_before, balance_after, reference) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [wallet.id, meter.user_id, 'CONSUMPTION', -costCharged, balanceBefore, balanceAfter, `MTR-BILL-${readingId}`]
+      `INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, balance_before, balance_after, reference, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [wallet.id, meter.user_id, 'CONSUMPTION', -costCharged, balanceBefore, balanceAfter, `MTR-BILL-${readingId}`, readingTimestamp]
     );
   }
 

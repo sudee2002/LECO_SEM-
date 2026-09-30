@@ -87,6 +87,8 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
   // Telemetry Simulator State
   const [simulating, setSimulating] = useState(false);
   const [lastSimResult, setLastSimResult] = useState(null);
+  const [customDailyKwh, setCustomDailyKwh] = useState('5.0');
+  const [simulatedDayOffset, setSimulatedDayOffset] = useState(0);
 
   // AI Chat State
   const [chatMessages, setChatMessages] = useState([
@@ -131,13 +133,28 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
     if (token) fetchData();
   }, [token, currentUser, refreshKey]);
 
-  // Inject Simulated Telemetry Reading
+  // Get next simulated reading date (advances +1 day / +24h from latest recorded reading date in history)
+  const getNextReadingDate = () => {
+    let baseTime = Date.now();
+    if (meterData?.readings && meterData.readings.length > 0) {
+      const timestamps = meterData.readings
+        .map(r => new Date(r.created_at).getTime())
+        .filter(t => !isNaN(t));
+      if (timestamps.length > 0) {
+        baseTime = Math.max(...timestamps);
+      }
+    }
+    return new Date(baseTime + 24 * 60 * 60 * 1000);
+  };
+
+  // Inject Simulated Telemetry Reading with Day-by-Day Date Advancement
   const handleSendTelemetry = async (additionalKwh) => {
-    if (!meterData?.meter) return;
+    if (!meterData?.meter || isNaN(additionalKwh) || additionalKwh <= 0) return;
     setSimulating(true);
     setLastSimResult(null);
 
     const newCumulative = (meterData.meter.last_reading_kwh || 0) + additionalKwh;
+    const readingDate = getNextReadingDate();
 
     try {
       const res = await fetch('http://localhost:5000/api/meters/telemetry', {
@@ -145,13 +162,17 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           meter_id: meterData.meter.id,
-          cumulative_kwh: parseFloat(newCumulative.toFixed(2))
+          cumulative_kwh: parseFloat(newCumulative.toFixed(2)),
+          created_at: readingDate.toISOString()
         })
       });
 
       const data = await res.json();
       if (res.ok) {
-        setLastSimResult(data.data);
+        setLastSimResult({
+          ...data.data,
+          readingDate: readingDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+        });
         await fetchData();
         if (onDataChange) onDataChange();
       }
@@ -202,15 +223,29 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
   const isConnected = meter?.power_state === 'CONNECTED';
   const balance = wallet?.current_balance || 0.0;
 
-  // Chart data formatting
-  const readingsChartData = (meterData?.readings || [])
-    .slice()
-    .reverse()
-    .map((r) => ({
-      time: new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  // Telemetry Readings formatted with Day of Week, Date, Time, Daily Incremental kWh & Cumulative kWh
+  const readingsFormatted = (meterData?.readings || []).map((r) => {
+    const d = new Date(r.created_at);
+    const dayName = d.toLocaleDateString([], { weekday: 'short' });
+    const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    const shortDateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    return {
+      id: r.id,
+      dayName,
+      dateStr,
+      shortDateStr,
+      timeStr,
+      fullLabel: `${dayName}, ${dateStr} ${timeStr}`,
+      shortLabel: `${dayName}, ${shortDateStr}`,
+      dailyKwh: r.incremental_kwh || 0,
       kwh: r.cumulative_kwh,
       charge: r.cost_charged
-    }));
+    };
+  });
+
+  const nextSimDateStr = getNextReadingDate().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -279,21 +314,41 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
         {/* Days Remaining Predictive Widget */}
         <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={{ fontSize: '12px', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em' }}>ESTIMATED DAYS REMAINING</span>
-              <Calendar size={20} color="#06b6d4" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  background: (prediction?.predictionConfidence === 'HIGH' ? 'rgba(16, 185, 129, 0.2)' : prediction?.predictionConfidence === 'MEDIUM' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(245, 158, 11, 0.2)'),
+                  color: (prediction?.predictionConfidence === 'HIGH' ? '#34d399' : prediction?.predictionConfidence === 'MEDIUM' ? '#38bdf8' : '#fbbf24')
+                }}>
+                  {prediction?.predictionConfidence || 'MEDIUM'} CONFIDENCE
+                </span>
+                <Calendar size={18} color="#06b6d4" />
+              </div>
             </div>
 
-            <div style={{ fontSize: '36px', fontWeight: '800', color: '#06b6d4', letterSpacing: '-0.03em' }}>
-              ~{prediction?.estimatedDaysRemaining || 0} Days
+            <div style={{ fontSize: '36px', fontWeight: '800', color: '#06b6d4', letterSpacing: '-0.03em', marginTop: '4px' }}>
+              ~{prediction?.estimatedDaysRemaining !== undefined ? prediction.estimatedDaysRemaining : 0} Days
             </div>
-            <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
-              {prediction?.predictionText}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+              <span style={{ fontSize: '11px', background: 'rgba(6, 182, 212, 0.1)', color: '#38bdf8', padding: '3px 8px', borderRadius: '4px', fontWeight: '700' }}>
+                Estimated range: {prediction?.estimatedMinDays || 0}–{prediction?.estimatedMaxDays || 0} days
+              </span>
+            </div>
+
+            <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px', lineHeight: '1.4' }} title="This estimate uses your recent electricity usage, current wallet balance, billing-cycle consumption, and applicable domestic tariff.">
+              {prediction?.predictionText || 'Based on your recent electricity usage.'}
             </p>
           </div>
 
-          <div style={{ fontSize: '12px', color: '#94a3b8', borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '12px' }}>
-            Avg Daily Usage: <strong style={{ color: '#f8fafc' }}>{prediction?.dailyAverageKwh || 4.0} kWh/day</strong>
+          <div style={{ fontSize: '12px', color: '#94a3b8', borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
+            <span>Avg Usage: <strong style={{ color: '#f8fafc' }}>{(prediction?.averageDailyUsageKwh || prediction?.dailyAverageKwh || 4.0).toFixed(2)} kWh/day</strong></span>
+            <span>Tomorrow: <strong style={{ color: '#34d399' }}>{(prediction?.predictedTomorrowKwh || 4.0).toFixed(2)} kWh</strong></span>
           </div>
         </div>
 
@@ -302,45 +357,111 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
       {/* Grid: Telemetry Simulator + Recharts Area Chart + AI Assistant */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         
-        {/* Live Smart Meter Pulse Simulator Card */}
+        {/* Live Smart Meter Telemetry Simulator Card */}
         <div className="glass-panel" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Activity size={20} color="#10b981" />
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f8fafc' }}>Smart Meter Telemetry Simulator</h3>
             </div>
-            <span style={{ fontSize: '11px', background: 'rgba(16, 185, 129, 0.1)', color: '#34d399', padding: '4px 8px', borderRadius: '6px', fontWeight: '600' }}>REST API Trigger</span>
+            <span style={{ fontSize: '10px', background: 'rgba(16, 185, 129, 0.1)', color: '#34d399', padding: '4px 8px', borderRadius: '6px', fontWeight: '600' }}>Day-by-Day Ingestion</span>
           </div>
 
-          <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px' }}>
-            Inject simulated kWh energy consumption from smart meter to trigger backend tariff billing and wallet deduction:
+          <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '14px' }}>
+            Type daily kWh consumption below. Each entry automatically updates your meter history, daily charges, and wallet balance day by day:
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
-            {[0.5, 1.5, 5.0].map((kwh) => (
+          {/* Editable Custom Consumption Input Box */}
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>
+              Daily Consumption Input:
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  placeholder="Type consumption e.g. 5.0"
+                  value={customDailyKwh}
+                  onChange={(e) => setCustomDailyKwh(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 75px 12px 14px',
+                    borderRadius: '10px',
+                    background: 'rgba(15, 23, 42, 0.9)',
+                    border: '1px solid var(--border-color)',
+                    color: '#34d399',
+                    fontSize: '15px',
+                    fontWeight: '800',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <span style={{ position: 'absolute', right: '14px', fontSize: '12px', color: '#64748b', fontWeight: '700', pointerEvents: 'none' }}>
+                  kWh / day
+                </span>
+              </div>
+
               <button
-                key={kwh}
-                onClick={() => handleSendTelemetry(kwh)}
-                disabled={simulating}
-                className="btn-secondary"
-                style={{ justifyContent: 'center', padding: '12px', fontSize: '13px' }}
+                onClick={() => handleSendTelemetry(parseFloat(customDailyKwh))}
+                disabled={simulating || !customDailyKwh || parseFloat(customDailyKwh) <= 0}
+                className="btn-primary"
+                style={{
+                  width: '100%',
+                  justify: 'center',
+                  padding: '12px 16px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  boxSizing: 'border-box'
+                }}
               >
-                +{kwh} kWh Pulse
+                <Zap size={16} /> + Add Day Reading ({(parseFloat(customDailyKwh) || 0).toFixed(1)} kWh)
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Preset Consumption Chips */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Quick Presets:</span>
+            {[2.0, 4.0, 6.0, 10.0].map((preset) => (
+              <button
+                key={preset}
+                onClick={() => setCustomDailyKwh(preset.toString())}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  background: parseFloat(customDailyKwh) === preset ? 'rgba(16, 185, 129, 0.25)' : 'rgba(30, 41, 59, 0.8)',
+                  border: '1px solid ' + (parseFloat(customDailyKwh) === preset ? '#10b981' : 'var(--border-color)'),
+                  color: parseFloat(customDailyKwh) === preset ? '#34d399' : '#94a3b8',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                {preset.toFixed(1)} kWh/day
               </button>
             ))}
           </div>
 
+          <div style={{ fontSize: '11px', color: '#60a5fa', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>📅 Next Reading Date: <strong style={{ color: '#38bdf8' }}>{nextSimDateStr}</strong></span>
+          </div>
+
           {lastSimResult && (
-            <div style={{ background: 'rgba(15, 23, 42, 0.9)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '13px' }}>
-              <div style={{ fontWeight: '700', color: '#34d399', marginBottom: '6px' }}>⚡ Telemetry Reading Received</div>
+            <div style={{ background: 'rgba(15, 23, 42, 0.9)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '12px' }}>
+              <div style={{ fontWeight: '700', color: '#34d399', marginBottom: '6px' }}>⚡ Day Reading Ingested ({lastSimResult.readingDate})</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                <span>Incremental Usage:</span> <strong>+{lastSimResult.incrementalKwh} kWh</strong>
+                <span>Daily Consumption Added:</span> <strong>+{lastSimResult.incrementalKwh} kWh</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                <span>New Cumulative Total:</span> <strong>{lastSimResult.cumulativeKwh} kWh</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
                 <span>Tariff Charge Deducted:</span> <strong style={{ color: '#f43f5e' }}>-LKR {lastSimResult.costCharged.toFixed(2)}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1', marginTop: '4px' }}>
-                <span>New Wallet Balance:</span> <strong>LKR {lastSimResult.balanceAfter.toFixed(2)}</strong>
+                <span>Wallet Balance:</span> <strong>LKR {lastSimResult.balanceAfter.toFixed(2)}</strong>
               </div>
             </div>
           )}
@@ -351,25 +472,28 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Activity size={20} color="#06b6d4" />
-              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f8fafc' }}>Telemetry Reading History</h3>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f8fafc' }}>Telemetry Reading History Chart</h3>
             </div>
-            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Cumulative kWh</span>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Day, Date & Time vs Usage</span>
           </div>
 
           <div style={{ height: '230px', width: '100%' }}>
-            {readingsChartData.length > 0 ? (
+            {readingsFormatted.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={readingsChartData}>
+                <AreaChart data={readingsFormatted}>
                   <defs>
                     <linearGradient id="colorKwh" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="time" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={11} />
-                  <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }} />
-                  <Area type="monotone" dataKey="kwh" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorKwh)" />
+                  <XAxis dataKey="shortLabel" stroke="#64748b" fontSize={10} />
+                  <YAxis stroke="#64748b" fontSize={10} />
+                  <Tooltip
+                    contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '12px' }}
+                    labelFormatter={(label, items) => items[0]?.payload?.fullLabel || label}
+                  />
+                  <Area type="monotone" dataKey="kwh" name="Cumulative kWh" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorKwh)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -443,6 +567,54 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
           </div>
         </div>
 
+      </div>
+
+      {/* Telemetry Reading History Detailed Day-by-Day Table */}
+      <div className="glass-panel" style={{ padding: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f8fafc' }}>Telemetry Reading History (Day-by-Day)</h3>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+              Detailed day-by-day smart meter ingestion history showing day of week, timestamp, daily usage (kWh/day), cumulative total, and daily tariff charges:
+            </p>
+          </div>
+          <span style={{ fontSize: '11px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', padding: '4px 10px', borderRadius: '8px', fontWeight: '700' }}>
+            {readingsFormatted.length} Daily Readings
+          </span>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-color)', color: '#94a3b8' }}>
+                <th style={{ padding: '10px' }}>Day & Date</th>
+                <th style={{ padding: '10px' }}>Time</th>
+                <th style={{ padding: '10px' }}>Daily Usage (kWh/day)</th>
+                <th style={{ padding: '10px' }}>Cumulative Total (kWh)</th>
+                <th style={{ padding: '10px' }}>Daily Charge (LKR)</th>
+                <th style={{ padding: '10px' }}>Ingestion Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {readingsFormatted.slice().reverse().map((r) => (
+                <tr key={r.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', color: '#e2e8f0' }}>
+                  <td style={{ padding: '12px 10px', fontWeight: '700', color: '#38bdf8' }}>{r.dayName}, {r.dateStr}</td>
+                  <td style={{ padding: '12px 10px', color: '#94a3b8' }}>{r.timeStr}</td>
+                  <td style={{ padding: '12px 10px', fontWeight: '700', color: '#34d399' }}>+{r.dailyKwh.toFixed(2)} kWh</td>
+                  <td style={{ padding: '12px 10px', fontWeight: '700' }}>{r.kwh.toFixed(2)} kWh</td>
+                  <td style={{ padding: '12px 10px', fontWeight: '700', color: r.charge > 0 ? '#fb7185' : '#94a3b8' }}>
+                    {r.charge > 0 ? `-LKR ${r.charge.toFixed(2)}` : 'LKR 0.00'}
+                  </td>
+                  <td style={{ padding: '12px 10px' }}>
+                    <span style={{ padding: '3px 8px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', fontSize: '11px', fontWeight: '700' }}>
+                      SUCCESS
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Wallet Ledger History Table */}

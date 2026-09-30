@@ -21,9 +21,13 @@ async function getDB() {
 
 function saveDB() {
   if (!dbInstance) return;
-  const data = dbInstance.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(dbPath, buffer);
+  try {
+    const data = dbInstance.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+  } catch (err) {
+    console.warn('saveDB warning (retrying):', err.message);
+  }
 }
 
 function resetDBFile() {

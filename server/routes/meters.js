@@ -8,7 +8,8 @@ const router = express.Router();
 // POST /api/meters/telemetry (Meter Ingestion Simulator Endpoint)
 router.post('/telemetry', async (req, res) => {
   try {
-    const { meter_id, cumulative_kwh } = req.body;
+    const { meter_id, cumulative_kwh, timestamp, created_at } = req.body;
+    const readingTime = timestamp || created_at || null;
 
     if (!meter_id || cumulative_kwh === undefined) {
       return res.status(400).json({ error: 'meter_id and cumulative_kwh are required.' });
@@ -19,7 +20,7 @@ router.post('/telemetry', async (req, res) => {
       return res.status(400).json({ error: 'cumulative_kwh must be a non-negative number.' });
     }
 
-    const result = await processMeterReading(meter_id, numericKwh);
+    const result = await processMeterReading(meter_id, numericKwh, readingTime);
     return res.json({
       message: 'Telemetry processed successfully',
       data: result
@@ -39,7 +40,7 @@ router.get('/my-meter', authenticateToken, async (req, res) => {
     }
 
     const recentReadings = await dbQuery.all(
-      'SELECT * FROM meter_readings WHERE meter_id = ? ORDER BY id DESC LIMIT 20',
+      'SELECT * FROM meter_readings WHERE meter_id = ? ORDER BY created_at ASC',
       [meter.id]
     );
 
