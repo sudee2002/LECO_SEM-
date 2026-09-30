@@ -3,6 +3,80 @@ import { Wallet, Zap, Calendar, Activity, Send, MessageSquare, AlertTriangle, Ar
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import TopUpModal from './TopUpModal';
 
+// Gradient Arc Wallet Gauge Component
+function WalletGauge({ balance }) {
+  const normalizedBalance = Math.max(0, balance);
+  const maxVal = Math.max(5000, Math.ceil(normalizedBalance / 1000) * 1000);
+  const percentage = Math.min(100, Math.max(0, (normalizedBalance / maxVal) * 100));
+
+  // Dynamic hue: 120 (Green) at 100%, 60 (Yellow/Amber) at 50%, 0 (Red) at 0%
+  const hue = (percentage / 100) * 120;
+  const strokeColor = `hsl(${hue}, 85%, 45%)`;
+  const glowColor = `hsl(${hue}, 85%, 55%)`;
+
+  const radius = 75;
+  const circumference = Math.PI * radius; // ~235.62
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  let statusText = 'ACTIVE BALANCE';
+  if (balance <= 0) {
+    statusText = 'EXHAUSTED / CUTOFF';
+  } else if (balance < 1000) {
+    statusText = 'LOW BALANCE WARNING';
+  }
+
+  return (
+    <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '8px 0 12px' }}>
+      <svg width="220" height="120" viewBox="0 0 200 115" style={{ overflow: 'visible' }}>
+        <defs>
+          <filter id="gaugeGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        {/* Background Track Arc */}
+        <path
+          d="M 25 100 A 75 75 0 0 1 175 100"
+          fill="none"
+          stroke="rgba(255, 255, 255, 0.07)"
+          strokeWidth="14"
+          strokeLinecap="round"
+        />
+
+        {/* Foreground Dynamic Gradient Color Arc */}
+        <path
+          d="M 25 100 A 75 75 0 0 1 175 100"
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="14"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          style={{
+            transition: 'stroke-dashoffset 0.8s ease-in-out, stroke 0.5s ease',
+            filter: `drop-shadow(0 0 6px ${glowColor})`
+          }}
+        />
+
+        {/* Scale labels */}
+        <text x="18" y="114" fill="#64748b" fontSize="9" fontWeight="600" textAnchor="middle">LKR 0</text>
+        <text x="182" y="114" fill="#64748b" fontSize="9" fontWeight="600" textAnchor="middle">LKR {maxVal.toLocaleString()}</text>
+      </svg>
+
+      {/* Center Text Overlay */}
+      <div style={{ position: 'absolute', top: '48px', textAlign: 'center', width: '100%' }}>
+        <div style={{ fontSize: '10px', fontWeight: '800', color: strokeColor, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          {statusText}
+        </div>
+        <div style={{ fontSize: '24px', fontWeight: '800', color: '#f8fafc', letterSpacing: '-0.02em', marginTop: '2px', textShadow: `0 0 12px ${glowColor}55` }}>
+          LKR {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerDashboard({ currentUser, token, onDataChange, refreshKey }) {
   const [meterData, setMeterData] = useState(null);
   const [walletData, setWalletData] = useState(null);
@@ -163,17 +237,15 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
         {/* Wallet Balance Hero Card */}
         <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={{ fontSize: '12px', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em' }}>PREPAID WALLET BALANCE</span>
               <Wallet size={20} color="#10b981" />
             </div>
 
-            <div style={{ fontSize: '36px', fontWeight: '800', color: balance <= 0 ? '#f43f5e' : '#f8fafc', letterSpacing: '-0.03em' }}>
-              LKR {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
+            <WalletGauge balance={balance} />
           </div>
 
-          <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+          <div style={{ marginTop: '12px', display: 'flex', gap: '12px' }}>
             <button onClick={() => setIsTopUpOpen(true)} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
               <Wallet size={18} /> Top Up Wallet
             </button>
