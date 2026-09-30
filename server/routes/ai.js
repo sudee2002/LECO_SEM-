@@ -83,12 +83,21 @@ router.post('/chat', authenticateToken, async (req, res) => {
       }
     } else if (lowerMsg.includes('tariff') || lowerMsg.includes('rate') || lowerMsg.includes('cost') || lowerMsg.includes('price')) {
       toolUsed = 'searchApprovedHelp()';
-      reply = `LECO/CEB electricity billing uses a tiered domestic block tariff structure:
-- 0 to 30 kWh: LKR 8.00/kWh (Fixed LKR 150/mo)
-- 31 to 60 kWh: LKR 15.00/kWh (Fixed LKR 300/mo)
-- 61 to 90 kWh: LKR 22.00/kWh (Fixed LKR 400/mo)
-- 91 to 180 kWh: LKR 35.00/kWh (Fixed LKR 1000/mo)
-- >180 kWh: LKR 50.00/kWh (Fixed LKR 1500/mo)`;
+      reply = `Sri Lankan Domestic Electricity Billing Structures:
+
+🔹 **Group A — Monthly Consumption 0–60 kWh**
+- 0–30 kWh: LKR 5.00/kWh (Fixed: LKR 80/mo for ≤30 units)
+- 31–60 kWh: LKR 9.00/kWh (Fixed: LKR 210/mo for 31–60 units)
+
+🔹 **Group B — Monthly Consumption 61–180 kWh**
+- 0–60 kWh: LKR 14.00/kWh
+- 61–90 kWh: LKR 20.00/kWh (Fixed: LKR 400/mo)
+- 91–120 kWh: LKR 28.00/kWh (Fixed: LKR 1,000/mo)
+- 121–180 kWh: LKR 44.00/kWh (Fixed: LKR 1,500/mo)
+
+🔹 **Group C — Monthly Consumption Above 180 kWh**
+- 0–180 kWh: LKR 32.50/kWh
+- Above 180 kWh: LKR 100.00/kWh (Fixed: LKR 2,500/mo)`;
     } else {
       toolUsed = 'searchApprovedHelp()';
       reply = `Hello ${req.user.name}! I am your LECO Smart AI Assistant. I can help you check your current wallet balance, estimated days remaining, power connection status, recent payments, or tariff rates. How can I assist you today?`;

@@ -77,6 +77,17 @@ const dbQuery = {
 };
 
 const initSchema = async () => {
+  try {
+    const tableInfo = await dbQuery.all("PRAGMA table_info(tariffs)");
+    const columnNames = tableInfo.map(c => c.name);
+    if (columnNames.length > 0 && !columnNames.includes('tariff_group')) {
+      console.log('Upgrading tariffs table schema for Sri Lankan tariff groups...');
+      await dbQuery.exec("DROP TABLE IF EXISTS tariffs");
+    }
+  } catch (e) {
+    // Ignore if table does not exist
+  }
+
   const schemaSql = `
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,15 +112,33 @@ const initSchema = async () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS tariff_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      version_name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'DOMESTIC',
+      effective_from DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      effective_to DATETIME,
+      status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE', 'ARCHIVED')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS tariffs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      version_id INTEGER,
       category TEXT NOT NULL DEFAULT 'DOMESTIC',
-      min_kwh REAL NOT NULL,
-      max_kwh REAL,
-      rate_per_kwh REAL NOT NULL,
-      fixed_charge_monthly REAL DEFAULT 0.0,
+      tariff_group TEXT NOT NULL DEFAULT 'DOMESTIC_0_60',
+      group_display_name TEXT DEFAULT 'GROUP A',
+      billing_block TEXT DEFAULT 'Low Consumption',
+      group_min_consumption REAL NOT NULL DEFAULT 0,
+      group_max_consumption REAL,
+      slab_min REAL NOT NULL DEFAULT 0,
+      slab_max REAL,
+      energy_rate REAL NOT NULL,
+      fixed_charge REAL DEFAULT 0.0,
       effective_from DATETIME DEFAULT CURRENT_TIMESTAMP,
-      is_active INTEGER DEFAULT 1
+      effective_to DATETIME,
+      is_active INTEGER DEFAULT 1,
+      FOREIGN KEY (version_id) REFERENCES tariff_versions(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS wallets (

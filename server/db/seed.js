@@ -34,19 +34,111 @@ async function seedDatabase() {
     ['MTR-1001', customer1Id, 'MTR-1001-COL', 'No. 45, Galle Road, Colombo 03', 'ACTIVE', 'CONNECTED', 142.5]
   );
 
-  // 4. Insert Sri Lankan Tiered Block Tariffs
-  const tariffs = [
-    { min: 0, max: 30, rate: 8.0, fixed: 150.0 },
-    { min: 31, max: 60, rate: 15.0, fixed: 300.0 },
-    { min: 61, max: 90, rate: 22.0, fixed: 400.0 },
-    { min: 91, max: 180, rate: 35.0, fixed: 1000.0 },
-    { min: 181, max: 99999, rate: 50.0, fixed: 1500.0 }
+  // 4. Insert Sri Lankan Tariff Version and Grouped Structure
+  const versionRes = await dbQuery.run(
+    `INSERT INTO tariff_versions (version_name, category, effective_from, status) VALUES (?, ?, ?, ?)`,
+    ['Domestic Tariff – May 2026', 'DOMESTIC', '2026-05-11 00:00:00', 'ACTIVE']
+  );
+  const versionId = versionRes.lastID;
+
+  const tariffSlabs = [
+    // Group A — Monthly consumption 0–60 kWh
+    {
+      group: 'DOMESTIC_0_60',
+      displayName: 'GROUP A',
+      block: 'Low Consumption',
+      groupMin: 0,
+      groupMax: 60,
+      slabMin: 0,
+      slabMax: 30,
+      rate: 5.00,
+      fixed: 80.00
+    },
+    {
+      group: 'DOMESTIC_0_60',
+      displayName: 'GROUP A',
+      block: 'Low Consumption',
+      groupMin: 0,
+      groupMax: 60,
+      slabMin: 31,
+      slabMax: 60,
+      rate: 9.00,
+      fixed: 210.00
+    },
+    // Group B — Monthly consumption 61–180 kWh
+    {
+      group: 'DOMESTIC_61_180',
+      displayName: 'GROUP B',
+      block: 'Standard',
+      groupMin: 61,
+      groupMax: 180,
+      slabMin: 0,
+      slabMax: 60,
+      rate: 14.00,
+      fixed: 0.00
+    },
+    {
+      group: 'DOMESTIC_61_180',
+      displayName: 'GROUP B',
+      block: 'Standard',
+      groupMin: 61,
+      groupMax: 180,
+      slabMin: 61,
+      slabMax: 90,
+      rate: 20.00,
+      fixed: 400.00
+    },
+    {
+      group: 'DOMESTIC_61_180',
+      displayName: 'GROUP B',
+      block: 'Standard',
+      groupMin: 61,
+      groupMax: 180,
+      slabMin: 91,
+      slabMax: 120,
+      rate: 28.00,
+      fixed: 1000.00
+    },
+    {
+      group: 'DOMESTIC_61_180',
+      displayName: 'GROUP B',
+      block: 'Standard',
+      groupMin: 61,
+      groupMax: 180,
+      slabMin: 121,
+      slabMax: 180,
+      rate: 44.00,
+      fixed: 1500.00
+    },
+    // Group C — Monthly consumption above 180 kWh
+    {
+      group: 'DOMESTIC_ABOVE_180',
+      displayName: 'GROUP C',
+      block: 'High Consumption',
+      groupMin: 181,
+      groupMax: null,
+      slabMin: 0,
+      slabMax: 180,
+      rate: 32.50,
+      fixed: 0.00
+    },
+    {
+      group: 'DOMESTIC_ABOVE_180',
+      displayName: 'GROUP C',
+      block: 'High Consumption',
+      groupMin: 181,
+      groupMax: null,
+      slabMin: 181,
+      slabMax: null,
+      rate: 100.00,
+      fixed: 2500.00
+    }
   ];
 
-  for (const t of tariffs) {
+  for (const t of tariffSlabs) {
     await dbQuery.run(
-      `INSERT INTO tariffs (category, min_kwh, max_kwh, rate_per_kwh, fixed_charge_monthly) VALUES (?, ?, ?, ?, ?)`,
-      ['DOMESTIC', t.min, t.max, t.rate, t.fixed]
+      `INSERT INTO tariffs (version_id, category, tariff_group, group_display_name, billing_block, group_min_consumption, group_max_consumption, slab_min, slab_max, energy_rate, fixed_charge, effective_from, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [versionId, 'DOMESTIC', t.group, t.displayName, t.block, t.groupMin, t.groupMax, t.slabMin, t.slabMax, t.rate, t.fixed, '2026-05-11 00:00:00', 1]
     );
   }
 

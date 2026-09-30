@@ -1,41 +1,179 @@
 const { dbQuery } = require('../db/database');
 
+// Default baseline fallback slabs if database has not been seeded yet
+const DEFAULT_DOMESTIC_SLABS = [
+  { tariff_group: 'DOMESTIC_0_60', group_display_name: 'GROUP A', billing_block: 'Low Consumption', group_min_consumption: 0, group_max_consumption: 60, slab_min: 0, slab_max: 30, energy_rate: 5.00, fixed_charge: 80.00 },
+  { tariff_group: 'DOMESTIC_0_60', group_display_name: 'GROUP A', billing_block: 'Low Consumption', group_min_consumption: 0, group_max_consumption: 60, slab_min: 31, slab_max: 60, energy_rate: 9.00, fixed_charge: 210.00 },
+  { tariff_group: 'DOMESTIC_61_180', group_display_name: 'GROUP B', billing_block: 'Standard', group_min_consumption: 61, group_max_consumption: 180, slab_min: 0, slab_max: 60, energy_rate: 14.00, fixed_charge: 0.00 },
+  { tariff_group: 'DOMESTIC_61_180', group_display_name: 'GROUP B', billing_block: 'Standard', group_min_consumption: 61, group_max_consumption: 180, slab_min: 61, slab_max: 90, energy_rate: 20.00, fixed_charge: 400.00 },
+  { tariff_group: 'DOMESTIC_61_180', group_display_name: 'GROUP B', billing_block: 'Standard', group_min_consumption: 61, group_max_consumption: 180, slab_min: 91, slab_max: 120, energy_rate: 28.00, fixed_charge: 1000.00 },
+  { tariff_group: 'DOMESTIC_61_180', group_display_name: 'GROUP B', billing_block: 'Standard', group_min_consumption: 61, group_max_consumption: 180, slab_min: 121, slab_max: 180, energy_rate: 44.00, fixed_charge: 1500.00 },
+  { tariff_group: 'DOMESTIC_ABOVE_180', group_display_name: 'GROUP C', billing_block: 'High Consumption', group_min_consumption: 181, group_max_consumption: null, slab_min: 0, slab_max: 180, energy_rate: 32.50, fixed_charge: 0.00 },
+  { tariff_group: 'DOMESTIC_ABOVE_180', group_display_name: 'GROUP C', billing_block: 'High Consumption', group_min_consumption: 181, group_max_consumption: null, slab_min: 181, slab_max: null, energy_rate: 100.00, fixed_charge: 2500.00 }
+];
+
 /**
- * Calculates tariff cost for a given incremental kWh based on active tariff slabs.
+ * Pure synchronous electricity calculation logic using provided tariff slab objects.
  */
-async function calculateTariffCost(incrementalKwh, currentTotalKwh) {
-  if (incrementalKwh <= 0) return 0.0;
+function calculateElectricityCostFromSlabs(consumptionKwh, slabs = DEFAULT_DOMESTIC_SLABS) {
+  const consumption = Math.max(0, parseFloat(consumptionKwh) || 0);
 
-  // Get active domestic tariffs ordered by min_kwh ascending
-  const tariffs = await dbQuery.all(
-    'SELECT * FROM tariffs WHERE is_active = 1 ORDER BY min_kwh ASC'
-  );
-
-  if (!tariffs || tariffs.length === 0) {
-    // Fallback default flat rate if database table is empty
-    return incrementalKwh * 25.0;
+  if (!slabs || slabs.length === 0) {
+    slabs = DEFAULT_DOMESTIC_SLABS;
   }
 
-  // Determine effective unit rate based on current block usage
-  let applicableRate = tariffs[0].rate_per_kwh;
-  for (const t of tariffs) {
-    if (currentTotalKwh >= t.min_kwh) {
-      applicableRate = t.rate_per_kwh;
+  // Normalize slab field access to support snake_case & camelCase
+  const normalizedSlabs = slabs.map(s => ({
+    id: s.id,
+    category: s.category || 'DOMESTIC',
+    tariffGroup: s.tariff_group || s.tariffGroup || 'DOMESTIC_0_60',
+    groupDisplayName: s.group_display_name || s.groupDisplayName || s.tariff_group || s.tariffGroup || 'GROUP A',
+    billingBlock: s.billing_block || s.billingBlock || '',
+    groupMinConsumption: s.group_min_consumption !== undefined ? Number(s.group_min_consumption) : (s.groupMinConsumption !== undefined ? Number(s.groupMinConsumption) : 0),
+    groupMaxConsumption: s.group_max_consumption !== undefined && s.group_max_consumption !== null ? Number(s.group_max_consumption) : (s.groupMaxConsumption !== undefined && s.groupMaxConsumption !== null ? Number(s.groupMaxConsumption) : null),
+    slabMin: s.slab_min !== undefined ? Number(s.slab_min) : (s.slabMin !== undefined ? Number(s.slabMin) : 0),
+    slabMax: s.slab_max !== undefined && s.slab_max !== null ? Number(s.slab_max) : (s.slabMax !== undefined && s.slabMax !== null ? Number(s.slabMax) : null),
+    energyRate: s.energy_rate !== undefined ? Number(s.energy_rate) : (s.energyRate !== undefined ? Number(s.energyRate) : (s.rate_per_kwh !== undefined ? Number(s.rate_per_kwh) : 0)),
+    fixedCharge: s.fixed_charge !== undefined ? Number(s.fixed_charge) : (s.fixedCharge !== undefined ? Number(s.fixedCharge) : (s.fixed_charge_monthly !== undefined ? Number(s.fixed_charge_monthly) : 0))
+  }));
+
+  // Identify unique tariff groups in configuration
+  const uniqueGroups = Array.from(new Set(normalizedSlabs.map(s => s.tariffGroup)));
+
+  // Determine which group applies based on consumption
+  let selectedGroup = null;
+  for (const g of uniqueGroups) {
+    const groupSlabs = normalizedSlabs.filter(s => s.tariffGroup === g);
+    const minC = Math.min(...groupSlabs.map(s => s.groupMinConsumption));
+    const maxVals = groupSlabs.map(s => s.groupMaxConsumption);
+    const hasNullMax = maxVals.includes(null);
+    const maxC = hasNullMax ? Infinity : Math.max(...maxVals.map(v => Number(v)));
+
+    if (consumption >= minC && consumption <= maxC) {
+      selectedGroup = g;
+      break;
     }
   }
 
-  const cost = incrementalKwh * applicableRate;
-  return parseFloat(cost.toFixed(2));
+  // Fallback if no exact range match
+  if (!selectedGroup) {
+    if (consumption > 180) {
+      selectedGroup = uniqueGroups.find(g => g.includes('180') || g.includes('ABOVE') || g.includes('C')) || uniqueGroups[uniqueGroups.length - 1];
+    } else if (consumption > 60) {
+      selectedGroup = uniqueGroups.find(g => g.includes('61') || g.includes('B')) || uniqueGroups[1] || uniqueGroups[0];
+    } else {
+      selectedGroup = uniqueGroups[0];
+    }
+  }
+
+  // Filter slabs for selected tariff group and sort by slabMin ASC
+  const groupSlabs = normalizedSlabs
+    .filter(s => s.tariffGroup === selectedGroup)
+    .sort((a, b) => a.slabMin - b.slabMin);
+
+  // Compute energy charge breakdown
+  const breakdown = [];
+  let totalEnergyCharge = 0;
+
+  for (const slab of groupSlabs) {
+    const slabMin = slab.slabMin;
+    const slabMax = slab.slabMax;
+    const blockStart = slabMin > 0 ? slabMin - 1 : 0;
+    const slabCapacity = slabMax !== null ? (slabMax - blockStart) : Infinity;
+
+    const unitsInSlab = Math.max(0, Math.min(consumption - blockStart, slabCapacity));
+
+    if (unitsInSlab > 0) {
+      const amount = parseFloat((unitsInSlab * slab.energyRate).toFixed(2));
+      totalEnergyCharge += amount;
+
+      const rangeLabel = slabMax !== null ? `${slabMin}-${slabMax}` : `>${blockStart}`;
+
+      breakdown.push({
+        range: rangeLabel,
+        units: parseFloat(unitsInSlab.toFixed(2)),
+        rate: slab.energyRate,
+        amount
+      });
+    }
+  }
+
+  // Determine fixed charge based on total consumption within selected group
+  let matchingFixedSlab = groupSlabs.find(s => {
+    const sMin = s.slabMin;
+    const sMax = s.slabMax !== null ? s.slabMax : Infinity;
+    return consumption >= sMin && consumption <= sMax;
+  });
+
+  if (!matchingFixedSlab) {
+    if (consumption === 0) {
+      matchingFixedSlab = groupSlabs[0];
+    } else {
+      matchingFixedSlab = groupSlabs[groupSlabs.length - 1];
+    }
+  }
+
+  const fixedCharge = matchingFixedSlab ? parseFloat(Number(matchingFixedSlab.fixedCharge).toFixed(2)) : 0.0;
+  const energyCharge = parseFloat(totalEnergyCharge.toFixed(2));
+  const totalCharge = parseFloat((energyCharge + fixedCharge).toFixed(2));
+
+  return {
+    consumption,
+    tariffGroup: selectedGroup,
+    groupDisplayName: groupSlabs[0]?.groupDisplayName || selectedGroup,
+    energyCharge,
+    fixedCharge,
+    totalCharge,
+    breakdown
+  };
 }
 
 /**
- * Process new incoming meter reading:
- * 1. Calculates energy consumption & billing cost.
- * 2. Updates wallet balance and inserts ledger transaction.
- * 3. Checks if balance depleted <= 0 and triggers automatic power DISCONNECT.
+ * Main reusable async calculation service for the platform.
+ * calculateElectricityCost(consumptionKwh, tariffCategory, billingDate)
+ */
+async function calculateElectricityCost(consumptionKwh, tariffCategory = 'DOMESTIC', billingDate = null) {
+  let query = 'SELECT * FROM tariffs WHERE category = ? AND is_active = 1';
+  const params = [tariffCategory];
+
+  if (billingDate) {
+    query += ' AND (effective_from <= ? OR effective_from IS NULL) AND (effective_to IS NULL OR effective_to >= ?)';
+    params.push(billingDate, billingDate);
+  }
+
+  query += ' ORDER BY slab_min ASC';
+
+  let slabs = [];
+  try {
+    slabs = await dbQuery.all(query, params);
+  } catch (err) {
+    console.error('Error fetching tariffs for calculation:', err);
+  }
+
+  if (!slabs || slabs.length === 0) {
+    slabs = DEFAULT_DOMESTIC_SLABS;
+  }
+
+  return calculateElectricityCostFromSlabs(consumptionKwh, slabs);
+}
+
+/**
+ * Calculates incremental tariff cost for a meter reading pulse.
+ */
+async function calculateTariffCost(incrementalKwh, currentTotalKwh) {
+  if (incrementalKwh <= 0) return 0.0;
+  const prevTotal = Math.max(0, currentTotalKwh - incrementalKwh);
+  const prevBill = await calculateElectricityCost(prevTotal);
+  const currentBill = await calculateElectricityCost(currentTotalKwh);
+  
+  const incrementalCost = Math.max(0, currentBill.totalCharge - prevBill.totalCharge);
+  return parseFloat(incrementalCost.toFixed(2));
+}
+
+/**
+ * Process new incoming meter reading & wallet deduction.
  */
 async function processMeterReading(meterId, cumulativeKwh) {
-  // 1. Fetch meter details
   const meter = await dbQuery.get('SELECT * FROM meters WHERE id = ?', [meterId]);
   if (!meter) {
     throw new Error(`Meter '${meterId}' not found.`);
@@ -44,10 +182,11 @@ async function processMeterReading(meterId, cumulativeKwh) {
   const lastReadingKwh = meter.last_reading_kwh || 0.0;
   const incrementalKwh = Math.max(0, parseFloat((cumulativeKwh - lastReadingKwh).toFixed(3)));
 
-  // Calculate billing cost
-  const costCharged = await calculateTariffCost(incrementalKwh, cumulativeKwh);
+  // Calculate billing cost delta using central service
+  const prevCost = (await calculateElectricityCost(lastReadingKwh)).totalCharge;
+  const newCost = (await calculateElectricityCost(cumulativeKwh)).totalCharge;
+  const costCharged = Math.max(0, parseFloat((newCost - prevCost).toFixed(2)));
 
-  // 2. Fetch user's wallet
   const wallet = await dbQuery.get('SELECT * FROM wallets WHERE user_id = ?', [meter.user_id]);
   if (!wallet) {
     throw new Error(`Wallet not found for user ID ${meter.user_id}`);
@@ -56,20 +195,17 @@ async function processMeterReading(meterId, cumulativeKwh) {
   const balanceBefore = wallet.current_balance;
   const balanceAfter = parseFloat((balanceBefore - costCharged).toFixed(2));
 
-  // 3. Record meter reading
   const readingRes = await dbQuery.run(
     `INSERT INTO meter_readings (meter_id, cumulative_kwh, incremental_kwh, cost_charged) VALUES (?, ?, ?, ?)`,
     [meterId, cumulativeKwh, incrementalKwh, costCharged]
   );
   const readingId = readingRes.lastID;
 
-  // 4. Update meter last reading
   await dbQuery.run(
     `UPDATE meters SET last_reading_kwh = ?, last_reading_at = CURRENT_TIMESTAMP WHERE id = ?`,
     [cumulativeKwh, meterId]
   );
 
-  // 5. Update wallet balance & add ledger entry if cost > 0
   if (costCharged > 0) {
     await dbQuery.run(
       `UPDATE wallets SET current_balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -82,20 +218,14 @@ async function processMeterReading(meterId, cumulativeKwh) {
     );
   }
 
-  // 6. Check power state control logic (Exhaustion Disconnect)
   let updatedPowerState = meter.power_state;
   let powerCommandExecuted = null;
 
   if (balanceAfter <= 0 && meter.power_state === 'CONNECTED') {
     updatedPowerState = 'DISCONNECTED';
 
-    // Update meter power state
-    await dbQuery.run(
-      `UPDATE meters SET power_state = 'DISCONNECTED' WHERE id = ?`,
-      [meterId]
-    );
+    await dbQuery.run(`UPDATE meters SET power_state = 'DISCONNECTED' WHERE id = ?`, [meterId]);
 
-    // Create disconnect power command
     const cmdId = 'CMD-DISC-' + Date.now();
     await dbQuery.run(
       `INSERT INTO power_commands (command_id, meter_id, user_id, action, reason, status) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -108,7 +238,6 @@ async function processMeterReading(meterId, cumulativeKwh) {
       reason: `Automatic cutoff: Wallet balance exhausted (LKR ${balanceAfter.toFixed(2)})`
     };
 
-    // Audit log
     await dbQuery.run(
       `INSERT INTO audit_logs (user_id, actor_role, action, details) VALUES (?, ?, ?, ?)`,
       [meter.user_id, 'system', 'POWER_DISCONNECTED', `Meter ${meterId} relay opened. Balance: LKR ${balanceAfter.toFixed(2)}`]
@@ -129,6 +258,8 @@ async function processMeterReading(meterId, cumulativeKwh) {
 }
 
 module.exports = {
+  calculateElectricityCostFromSlabs,
+  calculateElectricityCost,
   calculateTariffCost,
   processMeterReading
 };
