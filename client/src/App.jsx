@@ -33,8 +33,6 @@ export default function App() {
       if (res.ok && data.user) {
         setCurrentUser(data.user);
         setIsAuthOpen(false);
-        // Extend 10-minute session expiry window on successful fetch
-        localStorage.setItem('leco_session_expires_at', (Date.now() + SESSION_DURATION_MS).toString());
       } else {
         handleLogout();
       }
@@ -46,7 +44,7 @@ export default function App() {
     }
   };
 
-  // Restore session from localStorage on initial load or browser reload
+  // Restore active session on page reload if within 10-minute login window
   useEffect(() => {
     const savedToken = localStorage.getItem('leco_token');
     const savedExpiresAt = localStorage.getItem('leco_session_expires_at');
@@ -54,17 +52,20 @@ export default function App() {
     if (savedToken && savedExpiresAt) {
       const expiresAt = parseInt(savedExpiresAt, 10);
       if (Date.now() < expiresAt) {
+        // Session is still active (within 10 minutes of login)
         setToken(savedToken);
         fetchCurrentUser(savedToken);
       } else {
+        // 10-minute session has expired
         handleLogout();
       }
     } else {
+      // First time initial start -> open Sign In screen
       setIsAuthOpen(true);
     }
   }, []);
 
-  // Monitor session expiration automatically while app is active
+  // Monitor 10-minute session expiration automatically while app is active
   useEffect(() => {
     if (!token) return;
 
@@ -73,7 +74,7 @@ export default function App() {
       if (!savedExpiresAt || Date.now() >= parseInt(savedExpiresAt, 10)) {
         handleLogout();
       }
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [token]);

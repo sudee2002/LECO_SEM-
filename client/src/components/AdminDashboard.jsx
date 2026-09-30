@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Zap, Shield, FileText, Sliders, RefreshCw, Power, Edit2, Save, X, Plus, Trash2, UserPlus, AlertTriangle, CheckCircle, Calculator, Layers } from 'lucide-react';
+import { Users, Zap, Sliders, Power, Edit2, Save, X, Plus, Trash2, UserPlus, AlertTriangle, CheckCircle, Calculator, Layers } from 'lucide-react';
 
 function calculateClientTariff(kwh, tariffList) {
   const consumption = Math.max(0, parseFloat(kwh) || 0);
