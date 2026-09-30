@@ -132,7 +132,7 @@ export default function App() {
       </main>
 
       <footer style={{ borderTop: '1px solid var(--border-color)', padding: '20px 24px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
-        LECO Smart Grid Prepaid Electricity Platform • EE5206 Software Group Project Baseline • 2026
+        LECO Smart Grid Prepaid Electricity Platform
       </footer>
 
       <AuthModal

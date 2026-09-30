@@ -25,7 +25,7 @@ export default function Navbar({ currentUser, onLogout, onRefresh, isRefreshing,
               LECO SMART GRID
             </div>
             <div style={{ fontSize: '11px', color: '#10b981', fontWeight: '600', letterSpacing: '0.05em' }}>
-              PREPAID ELECTRICITY PLATFORM • EE5206
+              PREPAID ELECTRICITY PLATFORM
             </div>
           </div>
         </div>
