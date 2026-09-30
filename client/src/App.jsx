@@ -5,12 +5,22 @@ import AdminDashboard from './components/AdminDashboard';
 import AuthModal from './components/AuthModal';
 import { Zap, Activity, CreditCard, ArrowRight, Cpu } from 'lucide-react';
 
+const SESSION_DURATION_MS = 10 * 60 * 1000; // 10 minutes session duration
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [token, setToken] = useState('');
-  const [isAuthOpen, setIsAuthOpen] = useState(true); // Open Sign In modal on startup by default
+  const [token, setToken] = useState(() => localStorage.getItem('leco_token') || '');
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleLogout = () => {
+    setToken('');
+    setCurrentUser(null);
+    localStorage.removeItem('leco_token');
+    localStorage.removeItem('leco_session_expires_at');
+    setIsAuthOpen(true);
+  };
 
   const fetchCurrentUser = async (authToken) => {
     try {
@@ -23,15 +33,50 @@ export default function App() {
       if (res.ok && data.user) {
         setCurrentUser(data.user);
         setIsAuthOpen(false);
+        // Extend 10-minute session expiry window on successful fetch
+        localStorage.setItem('leco_session_expires_at', (Date.now() + SESSION_DURATION_MS).toString());
       } else {
         handleLogout();
       }
     } catch (err) {
       console.error('Fetch user session error:', err);
+      handleLogout();
     } finally {
       setIsRefreshing(false);
     }
   };
+
+  // Restore session from localStorage on initial load or browser reload
+  useEffect(() => {
+    const savedToken = localStorage.getItem('leco_token');
+    const savedExpiresAt = localStorage.getItem('leco_session_expires_at');
+
+    if (savedToken && savedExpiresAt) {
+      const expiresAt = parseInt(savedExpiresAt, 10);
+      if (Date.now() < expiresAt) {
+        setToken(savedToken);
+        fetchCurrentUser(savedToken);
+      } else {
+        handleLogout();
+      }
+    } else {
+      setIsAuthOpen(true);
+    }
+  }, []);
+
+  // Monitor session expiration automatically while app is active
+  useEffect(() => {
+    if (!token) return;
+
+    const interval = setInterval(() => {
+      const savedExpiresAt = localStorage.getItem('leco_session_expires_at');
+      if (!savedExpiresAt || Date.now() >= parseInt(savedExpiresAt, 10)) {
+        handleLogout();
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [token]);
 
   const handleRefresh = async () => {
     setRefreshKey(prev => prev + 1);
@@ -40,16 +85,11 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    setToken('');
-    setCurrentUser(null);
-    localStorage.removeItem('leco_token');
-    setIsAuthOpen(true); // Return to Sign In modal on logout
-  };
-
   const handleAuthSuccess = (data) => {
+    const expiresAt = Date.now() + SESSION_DURATION_MS;
     setToken(data.token);
     localStorage.setItem('leco_token', data.token);
+    localStorage.setItem('leco_session_expires_at', expiresAt.toString());
     setCurrentUser(data.user);
     setIsAuthOpen(false);
   };
