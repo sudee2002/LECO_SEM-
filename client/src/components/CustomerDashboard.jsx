@@ -223,9 +223,21 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
   const isConnected = meter?.power_state === 'CONNECTED';
   const balance = wallet?.current_balance || 0.0;
 
-  // Telemetry Readings formatted with Day of Week, Date, Time, Daily Incremental kWh & Cumulative kWh
+  // Telemetry Readings formatted with Day of Week, Date, Time, Daily Incremental kWh & Monthly Cycle kWh (resets 1st of month)
+  let currentMonthKey = null;
+  let runningCycleKwh = 0.0;
+
   const readingsFormatted = (meterData?.readings || []).map((r) => {
     const d = new Date(r.created_at);
+    const monthKey = `${d.getFullYear()}-${d.getMonth() + 1}`;
+
+    if (monthKey !== currentMonthKey) {
+      currentMonthKey = monthKey;
+      runningCycleKwh = 0.0;
+    }
+
+    runningCycleKwh = parseFloat((runningCycleKwh + (r.incremental_kwh || 0)).toFixed(3));
+
     const dayName = d.toLocaleDateString([], { weekday: 'short' });
     const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
     const shortDateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -241,6 +253,7 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
       shortLabel: `${dayName}, ${shortDateStr}`,
       dailyKwh: r.incremental_kwh || 0,
       kwh: r.cumulative_kwh,
+      cycleKwh: runningCycleKwh,
       charge: r.cost_charged
     };
   });
@@ -474,7 +487,9 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
               <Activity size={20} color="#06b6d4" />
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f8fafc' }}>Telemetry Reading History Chart</h3>
             </div>
-            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Day, Date & Time vs Usage</span>
+            <span style={{ fontSize: '11px', background: 'rgba(6, 182, 212, 0.15)', color: '#38bdf8', padding: '3px 8px', borderRadius: '6px', fontWeight: '600' }}>
+              Monthly Cycle (Resets 1st of Month)
+            </span>
           </div>
 
           <div style={{ height: '230px', width: '100%' }}>
@@ -492,8 +507,9 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
                   <Tooltip
                     contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '12px' }}
                     labelFormatter={(label, items) => items[0]?.payload?.fullLabel || label}
+                    formatter={(value) => [`${Number(value).toFixed(2)} kWh`, 'Monthly Cycle kWh']}
                   />
-                  <Area type="monotone" dataKey="kwh" name="Cumulative kWh" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorKwh)" />
+                  <Area type="monotone" dataKey="cycleKwh" name="Monthly Cycle kWh" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorKwh)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
