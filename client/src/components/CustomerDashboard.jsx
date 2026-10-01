@@ -264,7 +264,9 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
 
   const presentMonthCost = meterData?.present_month_cost_lkr !== undefined ? meterData.present_month_cost_lkr : 0.0;
   const remainingCredit = balance - presentMonthCost;
-  const isLowBalance = (remainingCredit <= 500) || (balance > 0 && presentMonthCost >= 0.8 * balance) || (remainingCredit <= 0);
+  const isInDeficit = meterData?.meter?.is_in_deficit || meterData?.is_in_deficit || (balance < presentMonthCost);
+  const graceDaysRemaining = meterData?.meter?.grace_days_remaining !== undefined ? meterData.meter.grace_days_remaining : (meterData?.grace_days_remaining !== undefined ? meterData.grace_days_remaining : 14);
+  const isLowBalance = isInDeficit || (remainingCredit <= 500) || (balance > 0 && presentMonthCost >= 0.8 * balance) || (remainingCredit <= 0);
 
   const activeRefDate = (meterData?.readings && meterData.readings.length > 0)
     ? new Date(meterData.readings[meterData.readings.length - 1].created_at)
@@ -283,11 +285,31 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
             <AlertTriangle size={24} color="#f43f5e" />
             <div>
               <div style={{ fontWeight: '700', color: '#fb7185', fontSize: '15px' }}>ELECTRICITY SUPPLY DISCONNECTED</div>
-              <div style={{ fontSize: '13px', color: '#cbd5e1' }}>Wallet balance exhausted (LKR {balance.toFixed(2)}). Top up now to automatically reconnect.</div>
+              <div style={{ fontSize: '13px', color: '#cbd5e1' }}>Wallet balance was less than monthly usage for 14 days or exhausted. Top up now to automatically reconnect power.</div>
             </div>
           </div>
           <button onClick={() => setIsTopUpOpen(true)} className="btn-primary" style={{ background: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)' }}>
             Recharge & Reconnect <Zap size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Top Banner Warning if In Deficit Grace Period */}
+      {isInDeficit && isConnected && (
+        <div className="glass-panel" style={{ background: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.4)', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <AlertTriangle size={24} color="#f59e0b" />
+            <div>
+              <div style={{ fontWeight: '700', color: '#fbbf24', fontSize: '15px' }}>
+                ⚠️ DISCONNECTION WARNING: 14-DAY GRACE PERIOD ACTIVE ({graceDaysRemaining} {graceDaysRemaining === 1 ? 'DAY' : 'DAYS'} REMAINING)
+              </div>
+              <div style={{ fontSize: '13px', color: '#cbd5e1' }}>
+                Wallet balance (LKR {balance.toFixed(2)}) is less than monthly usage (LKR {presentMonthCost.toFixed(2)}). Power will disconnect in {graceDaysRemaining} days if not topped up.
+              </div>
+            </div>
+          </div>
+          <button onClick={() => setIsTopUpOpen(true)} className="btn-primary" style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}>
+            Top Up Now <Zap size={16} />
           </button>
         </div>
       )}
@@ -379,8 +401,13 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
               }}>
                 <AlertTriangle size={16} color="#fbbf24" style={{ flexShrink: 0, marginTop: '2px' }} />
                 <div>
-                  <strong style={{ color: '#fbbf24', display: 'block', marginBottom: '2px' }}>⚠️ LOW WALLET BALANCE WARNING</strong>
-                  Monthly usage cost (LKR {presentMonthCost.toFixed(2)}) is approaching your wallet balance (LKR {balance.toFixed(2)}). Please top up soon!
+                  <strong style={{ color: '#fbbf24', display: 'block', marginBottom: '2px' }}>
+                    {isInDeficit ? `⚠️ LOW BALANCE: 14-DAY GRACE PERIOD (${graceDaysRemaining} DAYS REMAINING)` : '⚠️ LOW WALLET BALANCE WARNING'}
+                  </strong>
+                  {isInDeficit
+                    ? `Monthly usage cost (LKR ${presentMonthCost.toFixed(2)}) exceeds wallet balance (LKR ${balance.toFixed(2)}). Power will disconnect in ${graceDaysRemaining} days unless topped up!`
+                    : `Monthly usage cost (LKR ${presentMonthCost.toFixed(2)}) is approaching your wallet balance (LKR ${balance.toFixed(2)}). Please top up soon!`
+                  }
                 </div>
               </div>
             )}

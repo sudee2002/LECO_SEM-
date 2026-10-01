@@ -92,6 +92,16 @@ const initSchema = async () => {
     // Ignore if table does not exist
   }
 
+  try {
+    const meterInfo = await dbQuery.all("PRAGMA table_info(meters)");
+    const colNames = meterInfo.map(c => c.name);
+    if (colNames.length > 0 && !colNames.includes('deficit_since')) {
+      await dbQuery.exec("ALTER TABLE meters ADD COLUMN deficit_since DATETIME DEFAULT NULL");
+    }
+  } catch (e) {
+    // Ignore if table does not exist
+  }
+
   const schemaSql = `
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +122,7 @@ const initSchema = async () => {
       power_state TEXT DEFAULT 'CONNECTED' CHECK(power_state IN ('CONNECTED', 'DISCONNECTED')),
       last_reading_kwh REAL DEFAULT 0.0,
       last_reading_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      deficit_since DATETIME DEFAULT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );

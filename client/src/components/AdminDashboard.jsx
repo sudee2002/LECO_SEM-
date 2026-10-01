@@ -515,7 +515,10 @@ export default function AdminDashboard({ token, refreshKey }) {
                   const monthlyCost = c.present_month_cost_lkr || 0;
                   const balance = c.current_balance || 0;
                   const remainingCredit = balance - monthlyCost;
-                  const isLowBalance = (remainingCredit <= 500) || (balance > 0 && monthlyCost >= 0.8 * balance) || (remainingCredit <= 0);
+                  const isInDeficit = c.is_in_deficit || (balance < monthlyCost);
+                  const daysInDeficit = c.days_in_deficit || 0;
+                  const graceDaysRemaining = c.grace_days_remaining !== undefined ? c.grace_days_remaining : 14;
+                  const isLowBalance = isInDeficit || (remainingCredit <= 500) || (balance > 0 && monthlyCost >= 0.8 * balance) || (remainingCredit <= 0);
 
                   const isGroupA = usage <= 60;
                   const isGroupB = usage > 60 && usage <= 180;
@@ -541,7 +544,11 @@ export default function AdminDashboard({ token, refreshKey }) {
                           <span style={{ padding: '2px 7px', borderRadius: '5px', background: badgeBg, color: badgeColor, fontSize: '10px', fontWeight: '800', display: 'inline-block' }}>
                             {groupLabel}
                           </span>
-                          {isLowBalance && (
+                          {isInDeficit ? (
+                            <span style={{ padding: '2px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.25)', color: '#fbbf24', fontSize: '9px', fontWeight: '800' }} title={`Monthly usage exceeds balance. ${daysInDeficit}/14 days elapsed.`}>
+                              ⚠️ DEFICIT ({daysInDeficit}/14d)
+                            </span>
+                          ) : isLowBalance && (
                             <span style={{ padding: '2px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.25)', color: '#fbbf24', fontSize: '9px', fontWeight: '800' }} title="Monthly usage is approaching wallet balance">
                               ⚠️ LOW BAL
                             </span>

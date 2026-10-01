@@ -39,6 +39,9 @@ router.get('/my-meter', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'No meter assigned to this account.' });
     }
 
+    const wallet = await dbQuery.get('SELECT * FROM wallets WHERE user_id = ?', [req.user.id]);
+    const walletBalance = wallet ? wallet.current_balance : 0.0;
+
     const recentReadings = await dbQuery.all(
       'SELECT * FROM meter_readings WHERE meter_id = ? ORDER BY created_at ASC',
       [meter.id]
@@ -48,15 +51,32 @@ router.get('/my-meter', authenticateToken, async (req, res) => {
     const costObj = await calculateElectricityCost(presentMonthKwh);
     const presentMonthCostLkr = costObj ? costObj.totalCharge : 0.0;
 
+    let daysInDeficit = 0;
+    let graceDaysRemaining = 14;
+    const isInDeficit = walletBalance < presentMonthCostLkr;
+
+    if (isInDeficit && meter.deficit_since) {
+      const deficitStart = new Date(meter.deficit_since).getTime();
+      const now = Date.now();
+      daysInDeficit = Math.max(0, Math.floor((now - deficitStart) / (1000 * 60 * 60 * 24)));
+      graceDaysRemaining = Math.max(0, 14 - daysInDeficit);
+    }
+
     return res.json({
       meter: {
         ...meter,
         present_month_kwh: presentMonthKwh,
-        present_month_cost_lkr: presentMonthCostLkr
+        present_month_cost_lkr: presentMonthCostLkr,
+        is_in_deficit: isInDeficit,
+        days_in_deficit: daysInDeficit,
+        grace_days_remaining: graceDaysRemaining
       },
       readings: recentReadings,
       present_month_kwh: presentMonthKwh,
-      present_month_cost_lkr: presentMonthCostLkr
+      present_month_cost_lkr: presentMonthCostLkr,
+      is_in_deficit: isInDeficit,
+      days_in_deficit: daysInDeficit,
+      grace_days_remaining: graceDaysRemaining
     });
   } catch (err) {
     console.error('Fetch my-meter error:', err);

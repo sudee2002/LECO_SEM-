@@ -1,4 +1,5 @@
 const { dbQuery } = require('../db/database');
+const { getPresentMonthKwh, calculateElectricityCost } = require('./billingService');
 
 /**
  * Creates a PENDING top-up payment order.
@@ -30,7 +31,7 @@ async function createTopUpOrder(userId, amount) {
  * 1. Verifies order and avoids duplicate processing (idempotency).
  * 2. Updates payment status to SUCCESS.
  * 3. Credits user's wallet balance atomically.
- * 4. Checks if supply is DISCONNECTED & balance > 0; triggers automatic RECONNECT command.
+ * 4. Checks if supply is DISCONNECTED & balance >= monthly cost; triggers automatic RECONNECT command and clears deficit.
  */
 async function processPaymentCallback(orderId, gatewayTxnId, status = 'SUCCESS') {
   // 1. Fetch payment record
@@ -87,34 +88,44 @@ async function processPaymentCallback(orderId, gatewayTxnId, status = 'SUCCESS')
     [wallet.id, payment.user_id, 'TOPUP', payment.amount, balanceBefore, balanceAfter, `PAYHERE-${orderId}`]
   );
 
-  // 4. Power Reconnection Logic
+  // 4. Power Reconnection & Deficit Clearing Logic
   const meter = await dbQuery.get('SELECT * FROM meters WHERE user_id = ?', [payment.user_id]);
   let powerReconnected = false;
   let powerCommand = null;
 
-  if (meter && meter.power_state === 'DISCONNECTED' && balanceAfter > 0) {
-    await dbQuery.run(
-      `UPDATE meters SET power_state = 'CONNECTED' WHERE id = ?`,
-      [meter.id]
-    );
+  if (meter) {
+    const presentMonthKwh = await getPresentMonthKwh(meter.id);
+    const costObj = await calculateElectricityCost(presentMonthKwh);
+    const presentMonthCostLkr = costObj ? costObj.totalCharge : 0.0;
 
-    const cmdId = 'CMD-RECONN-' + Date.now();
-    await dbQuery.run(
-      `INSERT INTO power_commands (command_id, meter_id, user_id, action, reason, status) VALUES (?, ?, ?, ?, ?, ?)`,
-      [cmdId, meter.id, payment.user_id, 'RECONNECT', `Automatic restoration: Verified top-up of LKR ${payment.amount.toFixed(2)} credited (New balance: LKR ${balanceAfter.toFixed(2)})`, 'EXECUTED']
-    );
+    if (balanceAfter >= presentMonthCostLkr && meter.deficit_since) {
+      await dbQuery.run('UPDATE meters SET deficit_since = NULL WHERE id = ?', [meter.id]);
+    }
 
-    powerReconnected = true;
-    powerCommand = {
-      commandId: cmdId,
-      action: 'RECONNECT',
-      reason: `Verified top-up credited LKR ${payment.amount.toFixed(2)}`
-    };
+    if (meter.power_state === 'DISCONNECTED' && (balanceAfter >= presentMonthCostLkr || balanceAfter > 0)) {
+      await dbQuery.run(
+        `UPDATE meters SET power_state = 'CONNECTED', deficit_since = NULL WHERE id = ?`,
+        [meter.id]
+      );
 
-    await dbQuery.run(
-      `INSERT INTO audit_logs (user_id, actor_role, action, details) VALUES (?, ?, ?, ?)`,
-      [payment.user_id, 'system', 'POWER_RECONNECTED', `Meter ${meter.id} relay closed automatically. Balance: LKR ${balanceAfter.toFixed(2)}`]
-    );
+      const cmdId = 'CMD-RECONN-' + Date.now();
+      await dbQuery.run(
+        `INSERT INTO power_commands (command_id, meter_id, user_id, action, reason, status) VALUES (?, ?, ?, ?, ?, ?)`,
+        [cmdId, meter.id, payment.user_id, 'RECONNECT', `Automatic restoration: Verified top-up of LKR ${payment.amount.toFixed(2)} credited (New balance: LKR ${balanceAfter.toFixed(2)})`, 'EXECUTED']
+      );
+
+      powerReconnected = true;
+      powerCommand = {
+        commandId: cmdId,
+        action: 'RECONNECT',
+        reason: `Verified top-up credited LKR ${payment.amount.toFixed(2)}`
+      };
+
+      await dbQuery.run(
+        `INSERT INTO audit_logs (user_id, actor_role, action, details) VALUES (?, ?, ?, ?)`,
+        [payment.user_id, 'system', 'POWER_RECONNECTED', `Meter ${meter.id} relay closed automatically. Balance: LKR ${balanceAfter.toFixed(2)}`]
+      );
+    }
   }
 
   // Audit log for payment top-up

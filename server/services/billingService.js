@@ -290,10 +290,64 @@ async function processMeterReading(meterId, cumulativeKwh, customTimestamp = nul
     [cumulativeKwh, readingTimestamp, meterId]
   );
 
+  // 14-Day Deficit Disconnection Logic:
+  // Disconnect power relay if wallet balance is less than the accumulated monthly usage cost for 14 consecutive days.
+  const totalMonthCostObj = await calculateElectricityCost(monthKwhAfter);
+  const presentMonthCostLkr = totalMonthCostObj ? totalMonthCostObj.totalCharge : 0.0;
+  const currentWallet = await dbQuery.get('SELECT * FROM wallets WHERE user_id = ?', [meter.user_id]);
+  const walletBalance = currentWallet ? currentWallet.current_balance : 0.0;
+
+  const activeMeter = await dbQuery.get('SELECT * FROM meters WHERE id = ?', [meterId]);
+  let deficitSince = activeMeter.deficit_since;
+
+  if (walletBalance < presentMonthCostLkr) {
+    if (!deficitSince) {
+      deficitSince = readingTimestamp;
+      await dbQuery.run('UPDATE meters SET deficit_since = ? WHERE id = ?', [readingTimestamp, meterId]);
+    }
+
+    const deficitStartTime = new Date(deficitSince).getTime();
+    const currentReadingTime = new Date(readingTimestamp).getTime();
+    const daysInDeficit = (currentReadingTime - deficitStartTime) / (1000 * 60 * 60 * 24);
+
+    if (daysInDeficit >= 14 && activeMeter.power_state === 'CONNECTED') {
+      await dbQuery.run("UPDATE meters SET power_state = 'DISCONNECTED' WHERE id = ?", [meterId]);
+      const cmdId = 'CMD-DISC-DEFICIT-' + Date.now();
+      await dbQuery.run(
+        'INSERT INTO power_commands (command_id, meter_id, user_id, action, reason, status) VALUES (?, ?, ?, ?, ?, ?)',
+        [
+          cmdId,
+          meterId,
+          meter.user_id,
+          'DISCONNECT',
+          `Automatic 14-day deficit cutoff: Monthly usage (LKR ${presentMonthCostLkr.toFixed(2)}) exceeded wallet balance (LKR ${walletBalance.toFixed(2)}) for 14 days`,
+          'EXECUTED'
+        ]
+      );
+      await dbQuery.run(
+        'INSERT INTO audit_logs (user_id, actor_role, action, details) VALUES (?, ?, ?, ?)',
+        [
+          meter.user_id,
+          'system',
+          'POWER_DISCONNECTED',
+          `Meter ${meterId} disconnected after 14-day deficit (Usage: LKR ${presentMonthCostLkr.toFixed(2)} vs Balance: LKR ${walletBalance.toFixed(2)}).`
+        ]
+      );
+    }
+  } else {
+    if (deficitSince) {
+      await dbQuery.run('UPDATE meters SET deficit_since = NULL WHERE id = ?', [meterId]);
+      deficitSince = null;
+    }
+    if (activeMeter.power_state === 'DISCONNECTED' && walletBalance > 0) {
+      await dbQuery.run("UPDATE meters SET power_state = 'CONNECTED' WHERE id = ?", [meterId]);
+    }
+  }
+
   // Fetch current wallet & power state
   const updatedWallet = await dbQuery.get('SELECT * FROM wallets WHERE user_id = ?', [meter.user_id]);
   const currentBalance = updatedWallet ? updatedWallet.current_balance : 0.0;
-  const currentPowerState = (await dbQuery.get('SELECT power_state FROM meters WHERE id = ?', [meterId]))?.power_state || meter.power_state;
+  const finalPowerState = (await dbQuery.get('SELECT power_state FROM meters WHERE id = ?', [meterId]))?.power_state || meter.power_state;
 
   return {
     meterId,
@@ -305,7 +359,7 @@ async function processMeterReading(meterId, cumulativeKwh, customTimestamp = nul
     balanceAfter: currentBalance,
     settlementOccurred,
     settledAmount,
-    powerState: currentPowerState
+    powerState: finalPowerState
   };
 }
 

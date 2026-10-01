@@ -12,7 +12,7 @@ router.get('/', authenticateToken, requireRole('admin'), async (req, res) => {
     const consumers = await dbQuery.all(`
       SELECT 
         u.id, u.name, u.email, u.role, u.account_number, u.created_at,
-        m.id as meter_id, m.meter_number, m.location, m.status as meter_status, m.power_state, m.last_reading_kwh,
+        m.id as meter_id, m.meter_number, m.location, m.status as meter_status, m.power_state, m.last_reading_kwh, m.deficit_since,
         w.current_balance
       FROM users u
       LEFT JOIN meters m ON u.id = m.user_id
@@ -24,15 +24,33 @@ router.get('/', authenticateToken, requireRole('admin'), async (req, res) => {
     const consumersWithUsage = await Promise.all(consumers.map(async (c) => {
       let present_month_kwh = 0.0;
       let present_month_cost_lkr = 0.0;
+      let days_in_deficit = 0;
+      let grace_days_remaining = 14;
+      let is_in_deficit = false;
+
       if (c.meter_id) {
         present_month_kwh = await getPresentMonthKwh(c.meter_id);
         const costObj = await calculateElectricityCost(present_month_kwh);
         present_month_cost_lkr = costObj ? costObj.totalCharge : 0.0;
+        const bal = c.current_balance || 0.0;
+
+        if (bal < present_month_cost_lkr) {
+          is_in_deficit = true;
+          if (c.deficit_since) {
+            const deficitStart = new Date(c.deficit_since).getTime();
+            const now = Date.now();
+            days_in_deficit = Math.max(0, Math.floor((now - deficitStart) / (1000 * 60 * 60 * 24)));
+            grace_days_remaining = Math.max(0, 14 - days_in_deficit);
+          }
+        }
       }
       return {
         ...c,
         present_month_kwh,
-        present_month_cost_lkr
+        present_month_cost_lkr,
+        is_in_deficit,
+        days_in_deficit,
+        grace_days_remaining
       };
     }));
 
