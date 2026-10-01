@@ -215,8 +215,9 @@ async function predictRemainingDays(userId) {
   const predictor = createUsagePredictor(dailyHistory);
 
   // 4. Determine current billing cycle consumption
-  const now = new Date();
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const latestReading = readings && readings.length > 0 ? readings[readings.length - 1] : null;
+  const referenceDate = latestReading && latestReading.created_at ? new Date(latestReading.created_at) : new Date();
+  const currentMonthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1).toISOString();
 
   const cycleReadings = await dbQuery.all(
     'SELECT incremental_kwh FROM meter_readings WHERE meter_id = ? AND created_at >= ?',
@@ -226,8 +227,6 @@ async function predictRemainingDays(userId) {
   let billingCycleConsumptionKwh = 0.0;
   if (cycleReadings && cycleReadings.length > 0) {
     billingCycleConsumptionKwh = cycleReadings.reduce((sum, r) => sum + (r.incremental_kwh || 0), 0);
-  } else {
-    billingCycleConsumptionKwh = Math.min(meter.last_reading_kwh || 0.0, 60.0);
   }
   billingCycleConsumptionKwh = parseFloat(billingCycleConsumptionKwh.toFixed(2));
 
@@ -235,8 +234,8 @@ async function predictRemainingDays(userId) {
   const currentBill = await calculateElectricityCost(billingCycleConsumptionKwh, 'DOMESTIC');
   const currentCharged = currentBill.totalCharge;
 
-  const today = new Date();
-  const tomorrow = new Date();
+  const today = referenceDate;
+  const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
 
   const predictedTomorrowKwh = predictor.predict(tomorrow);

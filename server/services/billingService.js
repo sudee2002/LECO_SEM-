@@ -181,11 +181,33 @@ async function processMeterReading(meterId, cumulativeKwh, customTimestamp = nul
 
   const lastReadingKwh = meter.last_reading_kwh || 0.0;
   const incrementalKwh = Math.max(0, parseFloat((cumulativeKwh - lastReadingKwh).toFixed(3)));
+  const readingTimestamp = customTimestamp || new Date().toISOString();
 
-  // Calculate billing cost delta using central service
-  const prevCost = (await calculateElectricityCost(lastReadingKwh)).totalCharge;
-  const newCost = (await calculateElectricityCost(cumulativeKwh)).totalCharge;
-  const costCharged = Math.max(0, parseFloat((newCost - prevCost).toFixed(2)));
+  // Determine monthly billing cycle start for the reading date (1st of month at 00:00:00)
+  const readingDate = new Date(readingTimestamp);
+  const monthStart = new Date(readingDate.getFullYear(), readingDate.getMonth(), 1).toISOString();
+
+  // Fetch previous readings in the same calendar month
+  const monthReadings = await dbQuery.all(
+    'SELECT incremental_kwh FROM meter_readings WHERE meter_id = ? AND created_at >= ? AND created_at <= ?',
+    [meterId, monthStart, readingTimestamp]
+  );
+
+  const monthKwhBefore = parseFloat(
+    monthReadings.reduce((sum, r) => sum + (r.incremental_kwh || 0), 0).toFixed(3)
+  );
+  const monthKwhAfter = parseFloat((monthKwhBefore + incrementalKwh).toFixed(3));
+
+  // Calculate billing cost delta using monthly cycle consumption instead of lifetime cumulative kWh
+  const prevCostObj = await calculateElectricityCost(monthKwhBefore);
+  const newCostObj = await calculateElectricityCost(monthKwhAfter);
+
+  let costCharged = 0.0;
+  if (monthKwhBefore === 0 && monthKwhAfter > 0) {
+    costCharged = newCostObj.totalCharge;
+  } else {
+    costCharged = Math.max(0, parseFloat((newCostObj.totalCharge - prevCostObj.totalCharge).toFixed(2)));
+  }
 
   const wallet = await dbQuery.get('SELECT * FROM wallets WHERE user_id = ?', [meter.user_id]);
   if (!wallet) {
@@ -194,8 +216,6 @@ async function processMeterReading(meterId, cumulativeKwh, customTimestamp = nul
 
   const balanceBefore = wallet.current_balance;
   const balanceAfter = parseFloat((balanceBefore - costCharged).toFixed(2));
-
-  const readingTimestamp = customTimestamp || new Date().toISOString();
 
   const readingRes = await dbQuery.run(
     `INSERT INTO meter_readings (meter_id, cumulative_kwh, incremental_kwh, cost_charged, created_at) VALUES (?, ?, ?, ?, ?)`,
