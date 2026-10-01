@@ -583,16 +583,16 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
           </span>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ maxHeight: '340px', overflowY: 'auto', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, background: '#0f172a', zIndex: 1 }}>
               <tr style={{ borderBottom: '1px solid var(--border-color)', color: '#94a3b8' }}>
-                <th style={{ padding: '10px' }}>Day & Date</th>
-                <th style={{ padding: '10px' }}>Time</th>
-                <th style={{ padding: '10px' }}>Daily Usage (kWh/day)</th>
-                <th style={{ padding: '10px' }}>Cumulative Total (kWh)</th>
-                <th style={{ padding: '10px' }}>Daily Charge (LKR)</th>
-                <th style={{ padding: '10px' }}>Ingestion Status</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Day & Date</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Time</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Daily Usage (kWh/day)</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Cumulative Total (kWh)</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Daily Charge (LKR)</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Ingestion Status</th>
               </tr>
             </thead>
             <tbody>
@@ -621,16 +621,16 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
       <div className="glass-panel" style={{ padding: '24px' }}>
         <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f8fafc', marginBottom: '16px' }}>Prepaid Wallet Transaction Ledger</h3>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ maxHeight: '340px', overflowY: 'auto', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, background: '#0f172a', zIndex: 1 }}>
               <tr style={{ borderBottom: '1px solid var(--border-color)', color: '#94a3b8' }}>
-                <th style={{ padding: '10px' }}>Date</th>
-                <th style={{ padding: '10px' }}>Type</th>
-                <th style={{ padding: '10px' }}>Reference</th>
-                <th style={{ padding: '10px' }}>Balance Before</th>
-                <th style={{ padding: '10px' }}>Amount</th>
-                <th style={{ padding: '10px' }}>Balance After</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Date</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Type</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Reference</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Balance Before</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Amount</th>
+                <th style={{ padding: '10px', background: '#0f172a' }}>Balance After</th>
               </tr>
             </thead>
             <tbody>
