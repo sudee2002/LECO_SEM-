@@ -512,6 +512,11 @@ export default function AdminDashboard({ token, refreshKey }) {
               ) : (
                 consumers.map((c) => {
                   const usage = c.present_month_kwh || 0;
+                  const monthlyCost = c.present_month_cost_lkr || 0;
+                  const balance = c.current_balance || 0;
+                  const remainingCredit = balance - monthlyCost;
+                  const isLowBalance = (remainingCredit <= 500) || (balance > 0 && monthlyCost >= 0.8 * balance) || (remainingCredit <= 0);
+
                   const isGroupA = usage <= 60;
                   const isGroupB = usage > 60 && usage <= 180;
                   const groupLabel = isGroupA ? 'GROUP A (0–60 kWh)' : (isGroupB ? 'GROUP B (61–180 kWh)' : 'GROUP C (>180 kWh)');
@@ -530,11 +535,17 @@ export default function AdminDashboard({ token, refreshKey }) {
                       <td style={{ padding: '12px 10px' }}>
                         <div style={{ fontWeight: '800', color: '#fbbf24', fontSize: '14px', fontFamily: 'var(--font-mono)' }}>
                           {usage.toFixed(2)} <span style={{ fontSize: '11px', color: '#cbd5e1' }}>kWh</span>
+                          <span style={{ fontSize: '12px', color: '#f8fafc', marginLeft: '6px', fontWeight: '700' }}>(LKR {monthlyCost.toFixed(2)})</span>
                         </div>
-                        <div style={{ marginTop: '3px' }}>
+                        <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                           <span style={{ padding: '2px 7px', borderRadius: '5px', background: badgeBg, color: badgeColor, fontSize: '10px', fontWeight: '800', display: 'inline-block' }}>
                             {groupLabel}
                           </span>
+                          {isLowBalance && (
+                            <span style={{ padding: '2px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.25)', color: '#fbbf24', fontSize: '9px', fontWeight: '800' }} title="Monthly usage is approaching wallet balance">
+                              ⚠️ LOW BAL
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: '12px 10px', fontWeight: '700', color: (c.current_balance || 0) <= 0 ? '#fb7185' : '#34d399' }}>

@@ -1,6 +1,6 @@
 const express = require('express');
 const { dbQuery } = require('../db/database');
-const { processMeterReading, calculatePresentMonthKwhFromReadings } = require('../services/billingService');
+const { processMeterReading, calculatePresentMonthKwhFromReadings, calculateElectricityCost } = require('../services/billingService');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
@@ -45,14 +45,18 @@ router.get('/my-meter', authenticateToken, async (req, res) => {
     );
 
     const presentMonthKwh = calculatePresentMonthKwhFromReadings(recentReadings);
+    const costObj = await calculateElectricityCost(presentMonthKwh);
+    const presentMonthCostLkr = costObj ? costObj.totalCharge : 0.0;
 
     return res.json({
       meter: {
         ...meter,
-        present_month_kwh: presentMonthKwh
+        present_month_kwh: presentMonthKwh,
+        present_month_cost_lkr: presentMonthCostLkr
       },
       readings: recentReadings,
-      present_month_kwh: presentMonthKwh
+      present_month_kwh: presentMonthKwh,
+      present_month_cost_lkr: presentMonthCostLkr
     });
   } catch (err) {
     console.error('Fetch my-meter error:', err);

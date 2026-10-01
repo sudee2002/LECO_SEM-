@@ -262,6 +262,15 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
     ? meterData.present_month_kwh 
     : (readingsFormatted.length > 0 ? readingsFormatted[readingsFormatted.length - 1].cycleKwh : 0.0);
 
+  const presentMonthCost = meterData?.present_month_cost_lkr !== undefined ? meterData.present_month_cost_lkr : 0.0;
+  const remainingCredit = balance - presentMonthCost;
+  const isLowBalance = (remainingCredit <= 500) || (balance > 0 && presentMonthCost >= 0.8 * balance) || (remainingCredit <= 0);
+
+  const activeRefDate = (meterData?.readings && meterData.readings.length > 0)
+    ? new Date(meterData.readings[meterData.readings.length - 1].created_at)
+    : new Date();
+  const monthYearName = activeRefDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
   const nextSimDateStr = getNextReadingDate().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
@@ -304,11 +313,13 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
           </div>
         </div>
 
-        {/* Present Month kWh Usage Hero Card */}
+        {/* <Month, Year Usage> Hero Card */}
         <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em' }}>PRESENT MONTH kWh USAGE</span>
+              <span style={{ fontSize: '12px', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                {monthYearName} USAGE
+              </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{
                   fontSize: '10px',
@@ -324,8 +335,13 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
               </div>
             </div>
 
-            <div style={{ fontSize: '36px', fontWeight: '800', color: '#fbbf24', letterSpacing: '-0.03em', marginTop: '6px' }}>
-              {presentMonthKwh.toFixed(2)} <span style={{ fontSize: '18px', fontWeight: '600', color: '#cbd5e1' }}>kWh</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap', marginTop: '6px' }}>
+              <div style={{ fontSize: '32px', fontWeight: '800', color: '#fbbf24', letterSpacing: '-0.03em' }}>
+                {presentMonthKwh.toFixed(2)} <span style={{ fontSize: '16px', fontWeight: '600', color: '#cbd5e1' }}>kWh</span>
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: '800', color: '#f8fafc' }}>
+                LKR {presentMonthCost.toFixed(2)}
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
@@ -341,13 +357,36 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
                   {presentMonthKwh <= 60 ? 'Group A (Low Tier)' : (presentMonthKwh <= 180 ? 'Group B (Standard Tier)' : 'Group C (High Tier)')}
                 </span>
                 <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>
-                  Billing Range: <strong style={{ color: '#f8fafc' }}>{presentMonthKwh <= 60 ? '0–60 kWh' : (presentMonthKwh <= 180 ? '61–180 kWh' : '>180 kWh')}</strong>
+                  Range: <strong style={{ color: '#f8fafc' }}>{presentMonthKwh <= 60 ? '0–60 kWh' : (presentMonthKwh <= 180 ? '61–180 kWh' : '>180 kWh')}</strong>
                 </span>
               </div>
             </div>
 
+            {/* Low Wallet Balance Warning Alert Banner inside usage card */}
+            {isLowBalance && (
+              <div style={{
+                marginTop: '12px',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                background: 'rgba(245, 158, 11, 0.15)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                color: '#fbbf24',
+                fontSize: '11px',
+                lineHeight: '1.4',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '8px'
+              }}>
+                <AlertTriangle size={16} color="#fbbf24" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong style={{ color: '#fbbf24', display: 'block', marginBottom: '2px' }}>⚠️ LOW WALLET BALANCE WARNING</strong>
+                  Monthly usage cost (LKR {presentMonthCost.toFixed(2)}) is approaching your wallet balance (LKR {balance.toFixed(2)}). Please top up soon!
+                </div>
+              </div>
+            )}
+
             {/* Consumption Progress Bar */}
-            <div style={{ marginTop: '16px' }}>
+            <div style={{ marginTop: isLowBalance ? '10px' : '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#64748b', marginBottom: '4px', fontWeight: '600' }}>
                 <span>0 kWh</span>
                 <span>Active Range: {presentMonthKwh <= 60 ? '0–60 kWh' : (presentMonthKwh <= 180 ? '61–180 kWh' : '>180 kWh')}</span>
@@ -365,8 +404,8 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
           </div>
 
           <div style={{ fontSize: '12px', color: '#94a3b8', borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
-            <span>Group: <strong style={{ color: presentMonthKwh <= 60 ? '#34d399' : (presentMonthKwh <= 180 ? '#38bdf8' : '#fb7185') }}>{presentMonthKwh <= 60 ? 'Group A' : (presentMonthKwh <= 180 ? 'Group B' : 'Group C')}</strong></span>
-            <span>Billing Cycle: <strong style={{ color: '#f8fafc' }}>Resets 1st</strong></span>
+            <span>Monthly Bill: <strong style={{ color: '#fbbf24' }}>LKR {presentMonthCost.toFixed(2)}</strong></span>
+            <span>Available: <strong style={{ color: remainingCredit <= 500 ? '#f43f5e' : '#34d399' }}>LKR {Math.max(0, remainingCredit).toFixed(2)}</strong></span>
           </div>
         </div>
 

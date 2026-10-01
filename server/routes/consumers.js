@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { dbQuery } = require('../db/database');
-const { getPresentMonthKwh } = require('../services/billingService');
+const { getPresentMonthKwh, calculateElectricityCost } = require('../services/billingService');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
@@ -23,12 +23,16 @@ router.get('/', authenticateToken, requireRole('admin'), async (req, res) => {
 
     const consumersWithUsage = await Promise.all(consumers.map(async (c) => {
       let present_month_kwh = 0.0;
+      let present_month_cost_lkr = 0.0;
       if (c.meter_id) {
         present_month_kwh = await getPresentMonthKwh(c.meter_id);
+        const costObj = await calculateElectricityCost(present_month_kwh);
+        present_month_cost_lkr = costObj ? costObj.totalCharge : 0.0;
       }
       return {
         ...c,
-        present_month_kwh
+        present_month_kwh,
+        present_month_cost_lkr
       };
     }));
 
