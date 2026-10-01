@@ -1,6 +1,7 @@
 const express = require('express');
 const { dbQuery } = require('../db/database');
 const { predictRemainingDays } = require('../services/predictionService');
+const { getPresentMonthKwh } = require('../services/billingService');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -17,6 +18,12 @@ async function executeAITool(toolName, userId) {
     case 'getAccountStatus': {
       const meter = await dbQuery.get('SELECT id, power_state, status, last_reading_kwh FROM meters WHERE user_id = ?', [userId]);
       return { meter: meter || null };
+    }
+    case 'getPresentMonthUsage': {
+      const meter = await dbQuery.get('SELECT id FROM meters WHERE user_id = ?', [userId]);
+      if (!meter) return { presentMonthKwh: 0.0 };
+      const presentMonthKwh = await getPresentMonthKwh(meter.id);
+      return { presentMonthKwh, meterId: meter.id };
     }
     case 'estimateRemainingDays': {
       const pred = await predictRemainingDays(userId);
@@ -48,11 +55,15 @@ router.post('/chat', authenticateToken, async (req, res) => {
     const accountData = await executeAITool('getAccountStatus', userId);
     const predictionData = await executeAITool('estimateRemainingDays', userId);
     const paymentData = await executeAITool('getPaymentHistory', userId);
+    const usageData = await executeAITool('getPresentMonthUsage', userId);
 
     let reply = '';
     let toolUsed = 'searchApprovedHelp';
 
-    if (lowerMsg.includes('balance') || lowerMsg.includes('money') || lowerMsg.includes('credit')) {
+    if (lowerMsg.includes('usage') || lowerMsg.includes('kwh') || lowerMsg.includes('month') || lowerMsg.includes('consumption')) {
+      toolUsed = 'getPresentMonthUsage()';
+      reply = `Your total electricity usage for the present month is **${usageData.presentMonthKwh.toFixed(2)} kWh** (Meter ID: **${accountData.meter ? accountData.meter.id : 'N/A'}**).`;
+    } else if (lowerMsg.includes('balance') || lowerMsg.includes('money') || lowerMsg.includes('credit')) {
       toolUsed = 'getCurrentBalance()';
       reply = `Your current prepaid wallet balance is **LKR ${balanceData.balance.toFixed(2)}**. `;
       if (balanceData.balance <= 0) {

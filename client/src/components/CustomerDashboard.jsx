@@ -258,6 +258,10 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
     };
   });
 
+  const presentMonthKwh = meterData?.present_month_kwh !== undefined 
+    ? meterData.present_month_kwh 
+    : (readingsFormatted.length > 0 ? readingsFormatted[readingsFormatted.length - 1].cycleKwh : 0.0);
+
   const nextSimDateStr = getNextReadingDate().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
@@ -280,7 +284,7 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
       )}
 
       {/* Hero Stats Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
         
         {/* Wallet Balance Hero Card */}
         <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -297,6 +301,60 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
             <button onClick={() => setIsTopUpOpen(true)} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
               <Wallet size={18} /> Top Up Wallet
             </button>
+          </div>
+        </div>
+
+        {/* Present Month kWh Usage Hero Card */}
+        <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em' }}>PRESENT MONTH kWh USAGE</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '10px', fontWeight: '800', padding: '3px 8px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24' }}>
+                  ACTIVE CYCLE
+                </span>
+                <Activity size={18} color="#f59e0b" />
+              </div>
+            </div>
+
+            <div style={{ fontSize: '36px', fontWeight: '800', color: '#fbbf24', letterSpacing: '-0.03em', marginTop: '6px' }}>
+              {presentMonthKwh.toFixed(2)} <span style={{ fontSize: '18px', fontWeight: '600', color: '#cbd5e1' }}>kWh</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+              <span style={{
+                fontSize: '11px',
+                background: presentMonthKwh <= 60 ? 'rgba(16, 185, 129, 0.15)' : (presentMonthKwh <= 180 ? 'rgba(56, 189, 248, 0.15)' : 'rgba(244, 63, 94, 0.15)'),
+                color: presentMonthKwh <= 60 ? '#34d399' : (presentMonthKwh <= 180 ? '#38bdf8' : '#fb7185'),
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontWeight: '700'
+              }}>
+                {presentMonthKwh <= 60 ? 'Group A (0–60 kWh Low Tier)' : (presentMonthKwh <= 180 ? 'Group B (61–180 kWh Standard)' : 'Group C (>180 kWh High Tier)')}
+              </span>
+            </div>
+
+            {/* Consumption Progress Bar */}
+            <div style={{ marginTop: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#64748b', marginBottom: '4px', fontWeight: '600' }}>
+                <span>0 kWh</span>
+                <span>Low-Tier Limit: 60 kWh</span>
+              </div>
+              <div style={{ width: '100%', height: '6px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${Math.min(100, (presentMonthKwh / 60) * 100)}%`,
+                  height: '100%',
+                  background: presentMonthKwh <= 60 ? 'linear-gradient(90deg, #10b981 0%, #f59e0b 100%)' : 'linear-gradient(90deg, #f59e0b 0%, #f43f5e 100%)',
+                  borderRadius: '3px',
+                  transition: 'width 0.5s ease-in-out'
+                }}></div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: '12px', color: '#94a3b8', borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
+            <span>Cycle: <strong style={{ color: '#f8fafc' }}>1st of Month Reset</strong></span>
+            <span>Telemetry: <strong style={{ color: '#34d399' }}>Live</strong></span>
           </div>
         </div>
 
@@ -319,8 +377,9 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
             </div>
           </div>
 
-          <div style={{ fontSize: '12px', color: '#94a3b8', borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '12px' }}>
-            Cumulative Reading: <strong style={{ color: '#34d399' }}>{meter?.last_reading_kwh || 0} kWh</strong>
+          <div style={{ fontSize: '12px', color: '#94a3b8', borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '12px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <span>Present Month: <strong style={{ color: '#fbbf24' }}>{presentMonthKwh.toFixed(2)} kWh</strong></span>
+            <span>Cumulative: <strong style={{ color: '#34d399' }}>{meter?.last_reading_kwh || 0} kWh</strong></span>
           </div>
         </div>
 
@@ -482,14 +541,19 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
 
         {/* Historical Telemetry Consumption Chart (Recharts) */}
         <div className="glass-panel" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Activity size={20} color="#06b6d4" />
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f8fafc' }}>Telemetry Reading History Chart</h3>
             </div>
-            <span style={{ fontSize: '11px', background: 'rgba(6, 182, 212, 0.15)', color: '#38bdf8', padding: '3px 8px', borderRadius: '6px', fontWeight: '600' }}>
-              Monthly Cycle (Resets 1st of Month)
-            </span>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', padding: '3px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                Present Month: {presentMonthKwh.toFixed(2)} kWh
+              </span>
+              <span style={{ fontSize: '11px', background: 'rgba(6, 182, 212, 0.15)', color: '#38bdf8', padding: '3px 8px', borderRadius: '6px', fontWeight: '600' }}>
+                Monthly Cycle (Resets 1st)
+              </span>
+            </div>
           </div>
 
           <div style={{ height: '230px', width: '100%' }}>
@@ -556,7 +620,7 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
 
           {/* Quick Prompt Chips */}
           <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '8px' }}>
-            {['Current Balance?', 'Days remaining?', 'Power status?'].map((chip) => (
+            {['Present month kWh?', 'Current Balance?', 'Days remaining?', 'Power status?'].map((chip) => (
               <button
                 key={chip}
                 onClick={() => handleSendAiMessage(chip)}

@@ -279,9 +279,46 @@ async function processMeterReading(meterId, cumulativeKwh, customTimestamp = nul
   };
 }
 
+/**
+ * Pure calculation of total kWh usage for the present month from reading records.
+ */
+function calculatePresentMonthKwhFromReadings(readings) {
+  if (!readings || readings.length === 0) return 0.0;
+
+  const sorted = [...readings].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const latestReading = sorted[sorted.length - 1];
+  const refDate = latestReading && latestReading.created_at ? new Date(latestReading.created_at) : new Date();
+  const year = refDate.getFullYear();
+  const month = refDate.getMonth();
+
+  const presentMonthReadings = sorted.filter(r => {
+    if (!r.created_at) return false;
+    const d = new Date(r.created_at);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+
+  const totalKwh = presentMonthReadings.reduce((sum, r) => sum + (Number(r.incremental_kwh) || 0), 0);
+  return parseFloat(totalKwh.toFixed(2));
+}
+
+/**
+ * Fetch total present month kWh usage for a meter from DB.
+ */
+async function getPresentMonthKwh(meterId) {
+  if (!meterId) return 0.0;
+  const readings = await dbQuery.all(
+    'SELECT incremental_kwh, created_at FROM meter_readings WHERE meter_id = ? ORDER BY created_at ASC',
+    [meterId]
+  );
+  return calculatePresentMonthKwhFromReadings(readings);
+}
+
 module.exports = {
   calculateElectricityCostFromSlabs,
   calculateElectricityCost,
   calculateTariffCost,
-  processMeterReading
+  processMeterReading,
+  calculatePresentMonthKwhFromReadings,
+  getPresentMonthKwh
 };
+

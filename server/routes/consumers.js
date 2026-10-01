@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { dbQuery } = require('../db/database');
+const { getPresentMonthKwh } = require('../services/billingService');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
@@ -20,7 +21,18 @@ router.get('/', authenticateToken, requireRole('admin'), async (req, res) => {
       ORDER BY u.id DESC
     `);
 
-    return res.json({ consumers });
+    const consumersWithUsage = await Promise.all(consumers.map(async (c) => {
+      let present_month_kwh = 0.0;
+      if (c.meter_id) {
+        present_month_kwh = await getPresentMonthKwh(c.meter_id);
+      }
+      return {
+        ...c,
+        present_month_kwh
+      };
+    }));
+
+    return res.json({ consumers: consumersWithUsage });
   } catch (err) {
     console.error('Fetch consumers error:', err);
     return res.status(500).json({ error: 'Failed to fetch consumers.' });
