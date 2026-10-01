@@ -171,7 +171,10 @@ async function calculateTariffCost(incrementalKwh, currentTotalKwh) {
 }
 
 /**
- * Process new incoming meter reading & wallet deduction.
+ * Process new incoming meter reading.
+ * Daily telemetry accumulates kWh & incremental charges in meter_readings without deducting daily wallet balance.
+ * When the month cycle ends (crossover to a new calendar month), the total monthly balance/cost for the completed month
+ * is deducted from the wallet balance in a single cycle settlement transaction.
  */
 async function processMeterReading(meterId, cumulativeKwh, customTimestamp = null) {
   const meter = await dbQuery.get('SELECT * FROM meters WHERE id = ?', [meterId]);
@@ -186,8 +189,76 @@ async function processMeterReading(meterId, cumulativeKwh, customTimestamp = nul
   // Determine monthly billing cycle start for the reading date (1st of month at 00:00:00)
   const readingDate = new Date(readingTimestamp);
   const monthStart = new Date(readingDate.getFullYear(), readingDate.getMonth(), 1).toISOString();
+  const currentMonthKey = `${readingDate.getFullYear()}-${String(readingDate.getMonth() + 1).padStart(2, '0')}`;
 
-  // Fetch previous readings in the same calendar month
+  // Check for month cycle crossover (settle completed previous month if unbilled)
+  const lastReading = await dbQuery.get(
+    'SELECT created_at FROM meter_readings WHERE meter_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT 1',
+    [meterId, readingTimestamp]
+  );
+
+  let settlementOccurred = false;
+  let settledAmount = 0.0;
+
+  if (lastReading && lastReading.created_at) {
+    const prevDate = new Date(lastReading.created_at);
+    const prevMonthKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+    if (prevMonthKey !== currentMonthKey) {
+      // Check if previous month cycle was already settled
+      const existingSettlement = await dbQuery.get(
+        'SELECT id FROM wallet_transactions WHERE user_id = ? AND reference = ?',
+        [meter.user_id, `MONTHLY-SETTLEMENT-${prevMonthKey}`]
+      );
+
+      if (!existingSettlement) {
+        // Calculate total consumption for the completed month cycle
+        const prevMonthReadings = await dbQuery.all(
+          "SELECT incremental_kwh FROM meter_readings WHERE meter_id = ? AND strftime('%Y-%m', created_at) = ?",
+          [meterId, prevMonthKey]
+        );
+
+        const prevMonthTotalKwh = prevMonthReadings.reduce((sum, r) => sum + (r.incremental_kwh || 0), 0);
+        const prevCostObj = await calculateElectricityCost(prevMonthTotalKwh);
+        settledAmount = prevCostObj ? prevCostObj.totalCharge : 0.0;
+
+        if (settledAmount > 0) {
+          const walletToSettle = await dbQuery.get('SELECT * FROM wallets WHERE user_id = ?', [meter.user_id]);
+          if (walletToSettle) {
+            const balBefore = walletToSettle.current_balance;
+            const balAfter = parseFloat((balBefore - settledAmount).toFixed(2));
+
+            await dbQuery.run(
+              'UPDATE wallets SET current_balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              [balAfter, walletToSettle.id]
+            );
+
+            await dbQuery.run(
+              'INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, balance_before, balance_after, reference, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              [walletToSettle.id, meter.user_id, 'CONSUMPTION', -settledAmount, balBefore, balAfter, `MONTHLY-SETTLEMENT-${prevMonthKey}`, readingTimestamp]
+            );
+
+            settlementOccurred = true;
+
+            if (balAfter <= 0 && meter.power_state === 'CONNECTED') {
+              await dbQuery.run("UPDATE meters SET power_state = 'DISCONNECTED' WHERE id = ?", [meterId]);
+              const cmdId = 'CMD-DISC-' + Date.now();
+              await dbQuery.run(
+                'INSERT INTO power_commands (command_id, meter_id, user_id, action, reason, status) VALUES (?, ?, ?, ?, ?, ?)',
+                [cmdId, meterId, meter.user_id, 'DISCONNECT', `Monthly Cycle Settlement Cutoff: Balance exhausted (LKR ${balAfter.toFixed(2)})`, 'EXECUTED']
+              );
+              await dbQuery.run(
+                'INSERT INTO audit_logs (user_id, actor_role, action, details) VALUES (?, ?, ?, ?)',
+                [meter.user_id, 'system', 'POWER_DISCONNECTED', `Meter ${meterId} disconnected upon monthly cycle settlement (${prevMonthKey}). Balance: LKR ${balAfter.toFixed(2)}`]
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Fetch previous readings in the same calendar month for incremental cost calculation
   const monthReadings = await dbQuery.all(
     'SELECT incremental_kwh FROM meter_readings WHERE meter_id = ? AND created_at >= ? AND created_at <= ?',
     [meterId, monthStart, readingTimestamp]
@@ -198,7 +269,6 @@ async function processMeterReading(meterId, cumulativeKwh, customTimestamp = nul
   );
   const monthKwhAfter = parseFloat((monthKwhBefore + incrementalKwh).toFixed(3));
 
-  // Calculate billing cost delta using monthly cycle consumption instead of lifetime cumulative kWh
   const prevCostObj = await calculateElectricityCost(monthKwhBefore);
   const newCostObj = await calculateElectricityCost(monthKwhAfter);
 
@@ -209,62 +279,21 @@ async function processMeterReading(meterId, cumulativeKwh, customTimestamp = nul
     costCharged = Math.max(0, parseFloat((newCostObj.totalCharge - prevCostObj.totalCharge).toFixed(2)));
   }
 
-  const wallet = await dbQuery.get('SELECT * FROM wallets WHERE user_id = ?', [meter.user_id]);
-  if (!wallet) {
-    throw new Error(`Wallet not found for user ID ${meter.user_id}`);
-  }
-
-  const balanceBefore = wallet.current_balance;
-  const balanceAfter = parseFloat((balanceBefore - costCharged).toFixed(2));
-
-  const readingRes = await dbQuery.run(
+  // Save reading entry
+  await dbQuery.run(
     `INSERT INTO meter_readings (meter_id, cumulative_kwh, incremental_kwh, cost_charged, created_at) VALUES (?, ?, ?, ?, ?)`,
     [meterId, cumulativeKwh, incrementalKwh, costCharged, readingTimestamp]
   );
-  const readingId = readingRes.lastID;
 
   await dbQuery.run(
     `UPDATE meters SET last_reading_kwh = ?, last_reading_at = ? WHERE id = ?`,
     [cumulativeKwh, readingTimestamp, meterId]
   );
 
-  if (costCharged > 0) {
-    await dbQuery.run(
-      `UPDATE wallets SET current_balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [balanceAfter, wallet.id]
-    );
-
-    await dbQuery.run(
-      `INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, balance_before, balance_after, reference, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [wallet.id, meter.user_id, 'CONSUMPTION', -costCharged, balanceBefore, balanceAfter, `MTR-BILL-${readingId}`, readingTimestamp]
-    );
-  }
-
-  let updatedPowerState = meter.power_state;
-  let powerCommandExecuted = null;
-
-  if (balanceAfter <= 0 && meter.power_state === 'CONNECTED') {
-    updatedPowerState = 'DISCONNECTED';
-
-    await dbQuery.run(`UPDATE meters SET power_state = 'DISCONNECTED' WHERE id = ?`, [meterId]);
-
-    const cmdId = 'CMD-DISC-' + Date.now();
-    await dbQuery.run(
-      `INSERT INTO power_commands (command_id, meter_id, user_id, action, reason, status) VALUES (?, ?, ?, ?, ?, ?)`,
-      [cmdId, meterId, meter.user_id, 'DISCONNECT', `Automatic cutoff: Wallet balance exhausted (LKR ${balanceAfter.toFixed(2)})`, 'EXECUTED']
-    );
-
-    powerCommandExecuted = {
-      commandId: cmdId,
-      action: 'DISCONNECT',
-      reason: `Automatic cutoff: Wallet balance exhausted (LKR ${balanceAfter.toFixed(2)})`
-    };
-
-    await dbQuery.run(
-      `INSERT INTO audit_logs (user_id, actor_role, action, details) VALUES (?, ?, ?, ?)`,
-      [meter.user_id, 'system', 'POWER_DISCONNECTED', `Meter ${meterId} relay opened. Balance: LKR ${balanceAfter.toFixed(2)}`]
-    );
-  }
+  // Fetch current wallet & power state
+  const updatedWallet = await dbQuery.get('SELECT * FROM wallets WHERE user_id = ?', [meter.user_id]);
+  const currentBalance = updatedWallet ? updatedWallet.current_balance : 0.0;
+  const currentPowerState = (await dbQuery.get('SELECT power_state FROM meters WHERE id = ?', [meterId]))?.power_state || meter.power_state;
 
   return {
     meterId,
@@ -272,10 +301,11 @@ async function processMeterReading(meterId, cumulativeKwh, customTimestamp = nul
     cumulativeKwh,
     incrementalKwh,
     costCharged,
-    balanceBefore,
-    balanceAfter,
-    powerState: updatedPowerState,
-    powerCommand: powerCommandExecuted
+    balanceBefore: currentBalance,
+    balanceAfter: currentBalance,
+    settlementOccurred,
+    settledAmount,
+    powerState: currentPowerState
   };
 }
 
