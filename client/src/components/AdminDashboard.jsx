@@ -498,7 +498,7 @@ export default function AdminDashboard({ token, refreshKey }) {
                 <th style={{ padding: '10px' }}>Account No</th>
                 <th style={{ padding: '10px' }}>Meter ID</th>
                 <th style={{ padding: '10px' }}>Location</th>
-                <th style={{ padding: '10px' }}>Present Month kWh</th>
+                <th style={{ padding: '10px' }}>Present Month kWh & Tariff Group</th>
                 <th style={{ padding: '10px' }}>Wallet Balance</th>
                 <th style={{ padding: '10px' }}>Relay Status</th>
                 <th style={{ padding: '10px', textAlign: 'right' }}>Actions</th>
@@ -510,50 +510,64 @@ export default function AdminDashboard({ token, refreshKey }) {
                   <td colSpan="8" style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No consumer accounts found.</td>
                 </tr>
               ) : (
-                consumers.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', color: '#e2e8f0' }}>
-                    <td style={{ padding: '12px 10px' }}>
-                      <div style={{ fontWeight: '700', color: '#f8fafc' }}>{c.name}</div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>{c.email}</div>
-                    </td>
-                    <td style={{ padding: '12px 10px', fontFamily: 'var(--font-mono)', color: '#60a5fa' }}>{c.account_number}</td>
-                    <td style={{ padding: '12px 10px', fontFamily: 'var(--font-mono)', fontWeight: '700' }}>{c.meter_id || 'N/A'}</td>
-                    <td style={{ padding: '12px 10px', color: '#cbd5e1' }}>{c.location || 'Not Specified'}</td>
-                    <td style={{ padding: '12px 10px' }}>
-                      <span style={{ padding: '4px 8px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', fontSize: '12px', fontWeight: '700', fontFamily: 'var(--font-mono)' }}>
-                        {(c.present_month_kwh || 0).toFixed(2)} kWh
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 10px', fontWeight: '700', color: (c.current_balance || 0) <= 0 ? '#fb7185' : '#34d399' }}>
-                      LKR {(c.current_balance || 0).toFixed(2)}
-                    </td>
-                    <td style={{ padding: '12px 10px' }}>
-                      <span className={c.power_state === 'CONNECTED' ? 'badge-connected' : 'badge-disconnected'} style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' }}>
-                        {c.power_state || 'DISCONNECTED'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 10px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => handleOpenEditConsumer(c)}
-                          className="btn-secondary"
-                          style={{ padding: '6px 10px', fontSize: '11px' }}
-                          title="Edit Consumer"
-                        >
-                          <Edit2 size={12} /> Edit
-                        </button>
-                        <button
-                          onClick={() => setDeletingConsumer(c)}
-                          className="btn-danger"
-                          style={{ padding: '6px 10px', fontSize: '11px' }}
-                          title="Delete Consumer"
-                        >
-                          <Trash2 size={12} /> Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                consumers.map((c) => {
+                  const usage = c.present_month_kwh || 0;
+                  const isGroupA = usage <= 60;
+                  const isGroupB = usage > 60 && usage <= 180;
+                  const groupLabel = isGroupA ? 'GROUP A (0–60 kWh)' : (isGroupB ? 'GROUP B (61–180 kWh)' : 'GROUP C (>180 kWh)');
+                  const badgeBg = isGroupA ? 'rgba(16, 185, 129, 0.2)' : (isGroupB ? 'rgba(56, 189, 248, 0.2)' : 'rgba(244, 63, 94, 0.2)');
+                  const badgeColor = isGroupA ? '#34d399' : (isGroupB ? '#38bdf8' : '#fb7185');
+
+                  return (
+                    <tr key={c.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', color: '#e2e8f0' }}>
+                      <td style={{ padding: '12px 10px' }}>
+                        <div style={{ fontWeight: '700', color: '#f8fafc' }}>{c.name}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{c.email}</div>
+                      </td>
+                      <td style={{ padding: '12px 10px', fontFamily: 'var(--font-mono)', color: '#60a5fa' }}>{c.account_number}</td>
+                      <td style={{ padding: '12px 10px', fontFamily: 'var(--font-mono)', fontWeight: '700' }}>{c.meter_id || 'N/A'}</td>
+                      <td style={{ padding: '12px 10px', color: '#cbd5e1' }}>{c.location || 'Not Specified'}</td>
+                      <td style={{ padding: '12px 10px' }}>
+                        <div style={{ fontWeight: '800', color: '#fbbf24', fontSize: '14px', fontFamily: 'var(--font-mono)' }}>
+                          {usage.toFixed(2)} <span style={{ fontSize: '11px', color: '#cbd5e1' }}>kWh</span>
+                        </div>
+                        <div style={{ marginTop: '3px' }}>
+                          <span style={{ padding: '2px 7px', borderRadius: '5px', background: badgeBg, color: badgeColor, fontSize: '10px', fontWeight: '800', display: 'inline-block' }}>
+                            {groupLabel}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 10px', fontWeight: '700', color: (c.current_balance || 0) <= 0 ? '#fb7185' : '#34d399' }}>
+                        LKR {(c.current_balance || 0).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '12px 10px' }}>
+                        <span className={c.power_state === 'CONNECTED' ? 'badge-connected' : 'badge-disconnected'} style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' }}>
+                          {c.power_state || 'DISCONNECTED'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 10px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => handleOpenEditConsumer(c)}
+                            className="btn-secondary"
+                            style={{ padding: '6px 10px', fontSize: '11px' }}
+                            title="Edit Consumer"
+                          >
+                            <Edit2 size={12} /> Edit
+                          </button>
+                          <button
+                            onClick={() => setDeletingConsumer(c)}
+                            className="btn-danger"
+                            style={{ padding: '6px 10px', fontSize: '11px' }}
+                            title="Delete Consumer"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

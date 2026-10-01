@@ -310,8 +310,15 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={{ fontSize: '12px', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em' }}>PRESENT MONTH kWh USAGE</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '10px', fontWeight: '800', padding: '3px 8px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24' }}>
-                  ACTIVE CYCLE
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  background: presentMonthKwh <= 60 ? 'rgba(16, 185, 129, 0.2)' : (presentMonthKwh <= 180 ? 'rgba(56, 189, 248, 0.2)' : 'rgba(244, 63, 94, 0.2)'),
+                  color: presentMonthKwh <= 60 ? '#34d399' : (presentMonthKwh <= 180 ? '#38bdf8' : '#fb7185')
+                }}>
+                  {presentMonthKwh <= 60 ? 'GROUP A' : (presentMonthKwh <= 180 ? 'GROUP B' : 'GROUP C')}
                 </span>
                 <Activity size={18} color="#f59e0b" />
               </div>
@@ -321,30 +328,35 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
               {presentMonthKwh.toFixed(2)} <span style={{ fontSize: '18px', fontWeight: '600', color: '#cbd5e1' }}>kWh</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
-              <span style={{
-                fontSize: '11px',
-                background: presentMonthKwh <= 60 ? 'rgba(16, 185, 129, 0.15)' : (presentMonthKwh <= 180 ? 'rgba(56, 189, 248, 0.15)' : 'rgba(244, 63, 94, 0.15)'),
-                color: presentMonthKwh <= 60 ? '#34d399' : (presentMonthKwh <= 180 ? '#38bdf8' : '#fb7185'),
-                padding: '4px 10px',
-                borderRadius: '6px',
-                fontWeight: '700'
-              }}>
-                {presentMonthKwh <= 60 ? 'Group A (0–60 kWh Low Tier)' : (presentMonthKwh <= 180 ? 'Group B (61–180 kWh Standard)' : 'Group C (>180 kWh High Tier)')}
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span style={{
+                  fontSize: '11px',
+                  background: presentMonthKwh <= 60 ? 'rgba(16, 185, 129, 0.15)' : (presentMonthKwh <= 180 ? 'rgba(56, 189, 248, 0.15)' : 'rgba(244, 63, 94, 0.15)'),
+                  color: presentMonthKwh <= 60 ? '#34d399' : (presentMonthKwh <= 180 ? '#38bdf8' : '#fb7185'),
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontWeight: '800'
+                }}>
+                  {presentMonthKwh <= 60 ? 'Group A (Low Tier)' : (presentMonthKwh <= 180 ? 'Group B (Standard Tier)' : 'Group C (High Tier)')}
+                </span>
+                <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>
+                  Billing Range: <strong style={{ color: '#f8fafc' }}>{presentMonthKwh <= 60 ? '0–60 kWh' : (presentMonthKwh <= 180 ? '61–180 kWh' : '>180 kWh')}</strong>
+                </span>
+              </div>
             </div>
 
             {/* Consumption Progress Bar */}
             <div style={{ marginTop: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#64748b', marginBottom: '4px', fontWeight: '600' }}>
                 <span>0 kWh</span>
-                <span>Low-Tier Limit: 60 kWh</span>
+                <span>Active Range: {presentMonthKwh <= 60 ? '0–60 kWh' : (presentMonthKwh <= 180 ? '61–180 kWh' : '>180 kWh')}</span>
               </div>
               <div style={{ width: '100%', height: '6px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '3px', overflow: 'hidden' }}>
                 <div style={{
-                  width: `${Math.min(100, (presentMonthKwh / 60) * 100)}%`,
+                  width: `${Math.min(100, (presentMonthKwh / (presentMonthKwh <= 60 ? 60 : (presentMonthKwh <= 180 ? 180 : 300))) * 100)}%`,
                   height: '100%',
-                  background: presentMonthKwh <= 60 ? 'linear-gradient(90deg, #10b981 0%, #f59e0b 100%)' : 'linear-gradient(90deg, #f59e0b 0%, #f43f5e 100%)',
+                  background: presentMonthKwh <= 60 ? 'linear-gradient(90deg, #10b981 0%, #f59e0b 100%)' : (presentMonthKwh <= 180 ? 'linear-gradient(90deg, #38bdf8 0%, #f59e0b 100%)' : 'linear-gradient(90deg, #f59e0b 0%, #f43f5e 100%)'),
                   borderRadius: '3px',
                   transition: 'width 0.5s ease-in-out'
                 }}></div>
@@ -353,8 +365,8 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
           </div>
 
           <div style={{ fontSize: '12px', color: '#94a3b8', borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
-            <span>Cycle: <strong style={{ color: '#f8fafc' }}>1st of Month Reset</strong></span>
-            <span>Telemetry: <strong style={{ color: '#34d399' }}>Live</strong></span>
+            <span>Group: <strong style={{ color: presentMonthKwh <= 60 ? '#34d399' : (presentMonthKwh <= 180 ? '#38bdf8' : '#fb7185') }}>{presentMonthKwh <= 60 ? 'Group A' : (presentMonthKwh <= 180 ? 'Group B' : 'Group C')}</strong></span>
+            <span>Billing Cycle: <strong style={{ color: '#f8fafc' }}>Resets 1st</strong></span>
           </div>
         </div>
 
@@ -739,6 +751,173 @@ export default function CustomerDashboard({ currentUser, token, onDataChange, re
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Official Sri Lankan Domestic Electricity Tariff Schedule (Group A, B & C) */}
+      <div className="glass-panel" style={{ padding: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#f8fafc' }}>
+              Sri Lankan Domestic Electricity Tariff Schedule
+            </h3>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+              Official LECO domestic block tariff groups (Group A, B, C), billing consumption ranges, unit rates (LKR/kWh), and fixed monthly charges.
+            </p>
+          </div>
+          <span style={{ fontSize: '11px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '5px 12px', borderRadius: '8px', fontWeight: '700' }}>
+            Active Schedule: Domestic Tariff 2026
+          </span>
+        </div>
+
+        {/* 3 Tariff Group Cards Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+          
+          {/* GROUP A CARD */}
+          <div style={{
+            background: presentMonthKwh <= 60 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(15, 23, 42, 0.6)',
+            border: presentMonthKwh <= 60 ? '2px solid #10b981' : '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '20px',
+            position: 'relative'
+          }}>
+            {presentMonthKwh <= 60 && (
+              <span style={{ position: 'absolute', top: '-12px', right: '16px', background: '#10b981', color: '#0f172a', fontSize: '10px', fontWeight: '800', padding: '3px 10px', borderRadius: '12px', letterSpacing: '0.05em' }}>
+                ✓ YOUR ACTIVE TARIFF GROUP
+              </span>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '14px', fontWeight: '800', color: '#34d399' }}>GROUP A</span>
+              <span style={{ fontSize: '12px', fontWeight: '700', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', padding: '3px 8px', borderRadius: '6px' }}>
+                0 – 60 kWh / mo
+              </span>
+            </div>
+            <h4 style={{ fontSize: '15px', fontWeight: '700', color: '#f8fafc', marginBottom: '4px' }}>Low Consumption Tier</h4>
+            <p style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>Applied for monthly household energy usage up to 60 kWh.</p>
+
+            <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#64748b', textAlign: 'left' }}>
+                  <th style={{ padding: '6px 0' }}>Block Range</th>
+                  <th style={{ padding: '6px 0' }}>Energy Rate</th>
+                  <th style={{ padding: '6px 0' }}>Fixed Charge</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#e2e8f0' }}>
+                  <td style={{ padding: '8px 0', fontWeight: '600' }}>0 – 30 kWh</td>
+                  <td style={{ padding: '8px 0', color: '#34d399', fontWeight: '700' }}>LKR 5.00 / kWh</td>
+                  <td style={{ padding: '8px 0', color: '#cbd5e1' }}>LKR 80.00 / mo</td>
+                </tr>
+                <tr style={{ color: '#e2e8f0' }}>
+                  <td style={{ padding: '8px 0', fontWeight: '600' }}>31 – 60 kWh</td>
+                  <td style={{ padding: '8px 0', color: '#34d399', fontWeight: '700' }}>LKR 9.00 / kWh</td>
+                  <td style={{ padding: '8px 0', color: '#cbd5e1' }}>LKR 210.00 / mo</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* GROUP B CARD */}
+          <div style={{
+            background: (presentMonthKwh > 60 && presentMonthKwh <= 180) ? 'rgba(56, 189, 248, 0.1)' : 'rgba(15, 23, 42, 0.6)',
+            border: (presentMonthKwh > 60 && presentMonthKwh <= 180) ? '2px solid #38bdf8' : '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '20px',
+            position: 'relative'
+          }}>
+            {(presentMonthKwh > 60 && presentMonthKwh <= 180) && (
+              <span style={{ position: 'absolute', top: '-12px', right: '16px', background: '#38bdf8', color: '#0f172a', fontSize: '10px', fontWeight: '800', padding: '3px 10px', borderRadius: '12px', letterSpacing: '0.05em' }}>
+                ✓ YOUR ACTIVE TARIFF GROUP
+              </span>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '14px', fontWeight: '800', color: '#38bdf8' }}>GROUP B</span>
+              <span style={{ fontSize: '12px', fontWeight: '700', background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', padding: '3px 8px', borderRadius: '6px' }}>
+                61 – 180 kWh / mo
+              </span>
+            </div>
+            <h4 style={{ fontSize: '15px', fontWeight: '700', color: '#f8fafc', marginBottom: '4px' }}>Standard Consumption Tier</h4>
+            <p style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>Applied once monthly consumption exceeds 60 kWh up to 180 kWh.</p>
+
+            <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#64748b', textAlign: 'left' }}>
+                  <th style={{ padding: '6px 0' }}>Block Range</th>
+                  <th style={{ padding: '6px 0' }}>Energy Rate</th>
+                  <th style={{ padding: '6px 0' }}>Fixed Charge</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#e2e8f0' }}>
+                  <td style={{ padding: '6px 0', fontWeight: '600' }}>0 – 60 kWh</td>
+                  <td style={{ padding: '6px 0', color: '#38bdf8', fontWeight: '700' }}>LKR 14.00 / kWh</td>
+                  <td style={{ padding: '6px 0', color: '#cbd5e1' }}>LKR 0.00 / mo</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#e2e8f0' }}>
+                  <td style={{ padding: '6px 0', fontWeight: '600' }}>61 – 90 kWh</td>
+                  <td style={{ padding: '6px 0', color: '#38bdf8', fontWeight: '700' }}>LKR 20.00 / kWh</td>
+                  <td style={{ padding: '6px 0', color: '#cbd5e1' }}>LKR 400.00 / mo</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#e2e8f0' }}>
+                  <td style={{ padding: '6px 0', fontWeight: '600' }}>91 – 120 kWh</td>
+                  <td style={{ padding: '6px 0', color: '#38bdf8', fontWeight: '700' }}>LKR 28.00 / kWh</td>
+                  <td style={{ padding: '6px 0', color: '#cbd5e1' }}>LKR 1,000.00 / mo</td>
+                </tr>
+                <tr style={{ color: '#e2e8f0' }}>
+                  <td style={{ padding: '6px 0', fontWeight: '600' }}>121 – 180 kWh</td>
+                  <td style={{ padding: '6px 0', color: '#38bdf8', fontWeight: '700' }}>LKR 44.00 / kWh</td>
+                  <td style={{ padding: '6px 0', color: '#cbd5e1' }}>LKR 1,500.00 / mo</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* GROUP C CARD */}
+          <div style={{
+            background: presentMonthKwh > 180 ? 'rgba(244, 63, 94, 0.1)' : 'rgba(15, 23, 42, 0.6)',
+            border: presentMonthKwh > 180 ? '2px solid #f43f5e' : '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '20px',
+            position: 'relative'
+          }}>
+            {presentMonthKwh > 180 && (
+              <span style={{ position: 'absolute', top: '-12px', right: '16px', background: '#f43f5e', color: '#ffffff', fontSize: '10px', fontWeight: '800', padding: '3px 10px', borderRadius: '12px', letterSpacing: '0.05em' }}>
+                ✓ YOUR ACTIVE TARIFF GROUP
+              </span>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '14px', fontWeight: '800', color: '#fb7185' }}>GROUP C</span>
+              <span style={{ fontSize: '12px', fontWeight: '700', background: 'rgba(244, 63, 94, 0.2)', color: '#fb7185', padding: '3px 8px', borderRadius: '6px' }}>
+                Above 180 kWh / mo
+              </span>
+            </div>
+            <h4 style={{ fontSize: '15px', fontWeight: '700', color: '#f8fafc', marginBottom: '4px' }}>High Consumption Tier</h4>
+            <p style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>Applied once monthly consumption exceeds 180 kWh.</p>
+
+            <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#64748b', textAlign: 'left' }}>
+                  <th style={{ padding: '6px 0' }}>Block Range</th>
+                  <th style={{ padding: '6px 0' }}>Energy Rate</th>
+                  <th style={{ padding: '6px 0' }}>Fixed Charge</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#e2e8f0' }}>
+                  <td style={{ padding: '8px 0', fontWeight: '600' }}>0 – 180 kWh</td>
+                  <td style={{ padding: '8px 0', color: '#fb7185', fontWeight: '700' }}>LKR 32.50 / kWh</td>
+                  <td style={{ padding: '8px 0', color: '#cbd5e1' }}>LKR 0.00 / mo</td>
+                </tr>
+                <tr style={{ color: '#e2e8f0' }}>
+                  <td style={{ padding: '8px 0', fontWeight: '600' }}>Above 180 kWh</td>
+                  <td style={{ padding: '8px 0', color: '#fb7185', fontWeight: '700' }}>LKR 100.00 / kWh</td>
+                  <td style={{ padding: '8px 0', color: '#cbd5e1' }}>LKR 2,500.00 / mo</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
         </div>
       </div>
 
