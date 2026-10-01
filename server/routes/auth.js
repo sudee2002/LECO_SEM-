@@ -68,7 +68,7 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role = 'customer' } = req.body;
+    const { name, email, password, role = 'customer', accountNumber, meterId, location, initialBalance } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required.' });
@@ -80,38 +80,53 @@ router.post('/register', async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const accountNumber = 'LEC-' + Math.floor(100000 + Math.random() * 900000);
+    const finalAccNum = accountNumber?.trim() || ('LEC-' + Math.floor(100000 + Math.random() * 900000));
+    const parsedBal = parseFloat(initialBalance);
+    const finalBalance = !isNaN(parsedBal) && parsedBal >= 0 ? parseFloat(parsedBal.toFixed(2)) : 0.0;
 
     const userRes = await dbQuery.run(
       'INSERT INTO users (name, email, password_hash, role, account_number) VALUES (?, ?, ?, ?, ?)',
-      [name, email, passwordHash, role, accountNumber]
+      [name, email, passwordHash, role, finalAccNum]
     );
     const userId = userRes.lastID;
 
     // Create wallet for user
     const walletRes = await dbQuery.run(
       'INSERT INTO wallets (user_id, current_balance) VALUES (?, ?)',
-      [userId, 0.0]
+      [userId, finalBalance]
     );
+    const walletId = walletRes.lastID;
+
+    if (finalBalance > 0) {
+      await dbQuery.run(
+        'INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, balance_before, balance_after, reference) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [walletId, userId, 'TOPUP', finalBalance, 0.0, finalBalance, 'INITIAL-REGISTRATION-TOPUP']
+      );
+    }
 
     // Auto assign a smart meter if customer
     let meter = null;
     if (role === 'customer') {
-      const meterId = 'MTR-' + Math.floor(2000 + Math.random() * 8000);
-      const meterNum = meterId + '-COL';
+      const finalMeterId = meterId?.trim() || ('MTR-' + Math.floor(2000 + Math.random() * 8000));
+      const finalMeterNum = finalMeterId + '-COL';
+      const finalLocation = location?.trim() || 'Customer Premises';
+      const initialPowerState = finalBalance > 0 ? 'CONNECTED' : 'DISCONNECTED';
+
       await dbQuery.run(
         'INSERT INTO meters (id, user_id, meter_number, location, status, power_state, last_reading_kwh) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [meterId, userId, meterNum, 'Customer Premises', 'ACTIVE', 'CONNECTED', 0.0]
+        [finalMeterId, userId, finalMeterNum, finalLocation, 'ACTIVE', initialPowerState, 0.0]
       );
-      meter = await dbQuery.get('SELECT * FROM meters WHERE id = ?', [meterId]);
+      meter = await dbQuery.get('SELECT * FROM meters WHERE id = ?', [finalMeterId]);
     }
+
+    const fullWallet = await dbQuery.get('SELECT * FROM wallets WHERE id = ?', [walletId]);
 
     const tokenPayload = {
       id: userId,
       name,
       email,
       role,
-      accountNumber,
+      accountNumber: finalAccNum,
       meterId: meter ? meter.id : null
     };
 
@@ -120,7 +135,7 @@ router.post('/register', async (req, res) => {
     // Log register event
     await dbQuery.run(
       'INSERT INTO audit_logs (user_id, actor_role, action, details) VALUES (?, ?, ?, ?)',
-      [userId, role, 'USER_REGISTER', `New user registered: ${email}`]
+      [userId, role, 'USER_REGISTER', `New user registered: ${email} (Acc: ${finalAccNum}, Balance: LKR ${finalBalance})`]
     );
 
     return res.status(201).json({
@@ -131,9 +146,9 @@ router.post('/register', async (req, res) => {
         name,
         email,
         role,
-        accountNumber,
+        accountNumber: finalAccNum,
         meter,
-        wallet: { current_balance: 0.0 }
+        wallet: fullWallet || { id: walletId, user_id: userId, current_balance: finalBalance }
       }
     });
   } catch (err) {

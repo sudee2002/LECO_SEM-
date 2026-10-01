@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, User, KeyRound } from 'lucide-react';
+import { X, Lock, Mail, User, KeyRound, MapPin, Wallet, Hash, Cpu } from 'lucide-react';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -7,6 +7,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState('customer');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [meterId, setMeterId] = useState('');
+  const [location, setLocation] = useState('');
+  const [initialBalance, setInitialBalance] = useState('1000');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,7 +22,18 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     setLoading(true);
 
     const endpoint = isLogin ? 'http://localhost:5000/api/auth/login' : 'http://localhost:5000/api/auth/register';
-    const body = isLogin ? { email, password } : { name, email, password, role };
+    const body = isLogin 
+      ? { email, password } 
+      : { 
+          name, 
+          email, 
+          password, 
+          role, 
+          accountNumber, 
+          meterId, 
+          location, 
+          initialBalance: initialBalance !== '' ? parseFloat(initialBalance) : 0 
+        };
 
     try {
       const res = await fetch(endpoint, {
@@ -41,7 +56,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
   return (
     <div className="modal-overlay">
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '420px', padding: '28px', position: 'relative' }}>
+      <div className="glass-panel" style={{ width: '100%', maxWidth: isLogin ? '420px' : '520px', padding: '28px', position: 'relative', transition: 'max-width 0.3s ease' }}>
         <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
           <X size={18} />
         </button>
@@ -50,7 +65,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           {isLogin ? 'Sign In to LECO SEM' : 'Register Customer Account'}
         </h3>
         <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '20px' }}>
-          {isLogin ? 'Enter your credentials to manage prepaid wallet & meter telemetry' : 'Create a new smart meter customer account'}
+          {isLogin ? 'Enter your credentials to manage prepaid wallet & meter telemetry' : 'Create a new smart meter customer account with full configuration options'}
         </p>
 
         {error && (
@@ -62,10 +77,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {!isLogin && (
             <div>
-              <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Full Name</label>
+              <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Full Name *</label>
               <input
                 type="text"
-                placeholder="Sunil Perera"
+                placeholder="e.g. Sunil Perera"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -75,7 +90,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           )}
 
           <div>
-            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Email Address</label>
+            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Email Address *</label>
             <input
               type="email"
               placeholder="consumer@leco.lk"
@@ -87,7 +102,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           </div>
 
           <div>
-            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Password</label>
+            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Password *</label>
             <input
               type="password"
               placeholder="••••••••"
@@ -97,6 +112,55 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
               style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#ffffff', outline: 'none' }}
             />
           </div>
+
+          {!isLogin && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Account No (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Auto-generated"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#ffffff', outline: 'none' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Meter ID (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Auto-generated"
+                    value={meterId}
+                    onChange={(e) => setMeterId(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#ffffff', outline: 'none' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Installation Location</label>
+                <input
+                  type="text"
+                  placeholder="e.g. No. 45, Galle Road, Colombo 03"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#ffffff', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Initial Wallet Balance (LKR)</label>
+                <input
+                  type="number"
+                  placeholder="1000"
+                  value={initialBalance}
+                  onChange={(e) => setInitialBalance(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#ffffff', outline: 'none' }}
+                />
+              </div>
+            </>
+          )}
 
           <button type="submit" disabled={loading} className="btn-primary" style={{ justifyContent: 'center', padding: '12px', marginTop: '10px' }}>
             {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
